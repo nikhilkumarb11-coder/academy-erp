@@ -1,0 +1,41 @@
+{
+  "slug": "demo",
+  "name": "Demo Martial Arts Academy",
+  "shortName": "Demo",
+  "apiUrl": "mock",
+  "expectedApiVersion": 1,
+  "preset": "martial-arts",
+  "logo": "",
+  "theme": {
+    "primary": "#7A1F1F",
+    "accent": "#E0A526",
+    "background": "#FBF8F3",
+    "surface": "#FFFFFF",
+    "fontHeading": "Playfair Display",
+    "fontBody": "Inter"
+  },
+  "labels": {
+    "course": "Program",
+    "courses": "Programs",
+    "batch": "Batch",
+    "student": "Student",
+    "students": "Students",
+    "guardian": "Parent",
+    "guardians": "Parents",
+    "class": "Class"
+  },
+  "locale": {
+    "currency": "INR",
+    "currencySymbol": "₹",
+    "countryCode": "91",
+    "language": "en-IN",
+    "timezone": "Asia/Kolkata"
+  },
+  "modules": {
+    "attendance": true,
+    "onlinePayments": true,
+    "enquiries": true,
+    "expenses": true,
+    "finance": true
+  }
+}

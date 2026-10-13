@@ -1,0 +1,57 @@
+{
+  "id": "chess-abacus",
+  "label": "Chess, abacus and brain-skills centre",
+  "settings": {
+    "receipt_prefix": "RCPT",
+    "due_day": "5"
+  },
+  "categories": ["Chess", "Mental Maths", "Skills"],
+  "courses": [
+    { "category": "Chess", "name": "Chess – Beginner", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Chess", "name": "Chess – Intermediate", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Chess", "name": "Chess – Advanced / Rated", "monthly_fee": null, "classes_per_week": 3 },
+    { "category": "Mental Maths", "name": "Abacus", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Mental Maths", "name": "Vedic Maths", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Skills", "name": "Handwriting", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Skills", "name": "Rubik's Cube", "monthly_fee": null, "classes_per_week": 1 }
+  ],
+  "feePlans": [
+    { "name": "Monthly", "frequency": "Monthly", "months_covered": 1, "discount_pct": 0 },
+    { "name": "Quarterly", "frequency": "Quarterly", "months_covered": 3, "discount_pct": 5 },
+    { "name": "Annual", "frequency": "Annual", "months_covered": 12, "discount_pct": 15 }
+  ],
+  "chargeItems": [
+    { "name": "Admission fee", "default_amount": "", "applies_to": "Admission" },
+    { "name": "Level kit / books", "default_amount": "", "applies_to": "Course" },
+    { "name": "Level exam fee", "default_amount": "", "applies_to": "Course" },
+    { "name": "Tournament entry", "default_amount": "", "applies_to": "Course" }
+  ],
+  "expenseCategories": ["Rent", "Marketing", "Salaries", "Kits & books", "Utilities", "Gateway fees", "Competitions", "Other"],
+  "customFields": [
+    { "entity": "Student", "key": "level", "label": "Current level", "type": "text", "required": false },
+    { "entity": "Student", "key": "fide_id", "label": "FIDE ID", "type": "text", "required": false },
+    { "entity": "Student", "key": "rating", "label": "Rating", "type": "number", "required": false }
+  ],
+  "messageTemplates": [
+    {
+      "type": "FeeReminder",
+      "name": "Fee reminder",
+      "text": "Dear {parent}, the fee of ₹{balance} for {student} ({course}, {month}) is pending. Pay here: {payment_link}\n\nThank you,\n{academy}"
+    },
+    {
+      "type": "Receipt",
+      "name": "Payment receipt",
+      "text": "Dear {parent}, we received ₹{amount} for {student} ({course}, {month}). Receipt {receipt_no}: {receipt_link}\nBalance: ₹{balance}\n\n{academy}"
+    },
+    {
+      "type": "Absent",
+      "name": "Absent today",
+      "text": "Dear {parent}, {student} missed {course} today ({date}).\n\n{academy}"
+    },
+    {
+      "type": "Event",
+      "name": "Tournament / level exam",
+      "text": "Dear parents, {event} is on {date}. {details}\n\n{academy}"
+    }
+  ]
+}

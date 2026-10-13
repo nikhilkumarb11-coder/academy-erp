@@ -1,0 +1,42 @@
+{
+  "$comment": "PUBLIC file served to browsers before login. Never put passwords, keys or secrets here. Business rules (fees, discounts, due day) live in the tenant Sheet's Settings/FeePlans tabs. apiUrl: Apps Script /exec URL, \"mock\" for the in-browser demo backend, or empty until deployed.",
+  "slug": "example",
+  "name": "Example Academy",
+  "shortName": "Example",
+  "apiUrl": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
+  "expectedApiVersion": 1,
+  "preset": "multi-activity",
+  "logo": "",
+  "theme": {
+    "primary": "#0B1F3A",
+    "accent": "#C9A227",
+    "background": "#FAF7F0",
+    "surface": "#FFFFFF",
+    "fontHeading": "Playfair Display",
+    "fontBody": "Inter"
+  },
+  "labels": {
+    "course": "Course",
+    "courses": "Courses",
+    "batch": "Batch",
+    "student": "Student",
+    "students": "Students",
+    "guardian": "Parent",
+    "guardians": "Parents",
+    "class": "Class"
+  },
+  "locale": {
+    "currency": "INR",
+    "currencySymbol": "₹",
+    "countryCode": "91",
+    "language": "en-IN",
+    "timezone": "Asia/Kolkata"
+  },
+  "modules": {
+    "attendance": true,
+    "onlinePayments": true,
+    "enquiries": true,
+    "expenses": true,
+    "finance": true
+  }
+}

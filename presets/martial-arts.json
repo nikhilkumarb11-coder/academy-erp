@@ -1,0 +1,54 @@
+{
+  "id": "martial-arts",
+  "label": "Martial arts academy (karate, taekwondo, kalari, judo)",
+  "settings": {
+    "receipt_prefix": "RCPT",
+    "due_day": "5"
+  },
+  "categories": ["Martial Arts", "Fitness"],
+  "courses": [
+    { "category": "Martial Arts", "name": "Karate", "monthly_fee": null, "classes_per_week": 3 },
+    { "category": "Martial Arts", "name": "Taekwondo", "monthly_fee": null, "classes_per_week": 3 },
+    { "category": "Martial Arts", "name": "Kalari", "monthly_fee": null, "classes_per_week": 3 },
+    { "category": "Fitness", "name": "Self-defence (Women)", "monthly_fee": null, "classes_per_week": 2 }
+  ],
+  "feePlans": [
+    { "name": "Monthly", "frequency": "Monthly", "months_covered": 1, "discount_pct": 0 },
+    { "name": "Quarterly", "frequency": "Quarterly", "months_covered": 3, "discount_pct": 5 },
+    { "name": "Annual", "frequency": "Annual", "months_covered": 12, "discount_pct": 15 }
+  ],
+  "chargeItems": [
+    { "name": "Admission fee", "default_amount": "", "applies_to": "Admission" },
+    { "name": "Uniform (Gi)", "default_amount": "", "applies_to": "Any" },
+    { "name": "Belt grading fee", "default_amount": "", "applies_to": "Course" },
+    { "name": "Tournament fee", "default_amount": "", "applies_to": "Course" }
+  ],
+  "expenseCategories": ["Rent", "Marketing", "Salaries", "Equipment", "Utilities", "Gateway fees", "Grading & tournaments", "Other"],
+  "customFields": [
+    { "entity": "Student", "key": "current_belt", "label": "Current belt", "type": "select", "options": ["White", "Yellow", "Orange", "Green", "Blue", "Purple", "Brown", "Black"], "required": false },
+    { "entity": "Student", "key": "blood_group", "label": "Blood group", "type": "select", "options": ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"], "required": false },
+    { "entity": "Student", "key": "medical_notes", "label": "Medical notes", "type": "text", "required": false }
+  ],
+  "messageTemplates": [
+    {
+      "type": "FeeReminder",
+      "name": "Monthly fee reminder",
+      "text": "Dear {parent}, the fee of ₹{balance} for {student} ({course}, {month}) is pending. Pay here: {payment_link}\n\nOSU!\n{academy}"
+    },
+    {
+      "type": "Receipt",
+      "name": "Payment receipt",
+      "text": "Dear {parent}, we received ₹{amount} for {student} ({course}, {month}). Receipt {receipt_no}: {receipt_link}\nBalance: ₹{balance}\n\n{academy}"
+    },
+    {
+      "type": "Absent",
+      "name": "Absent today",
+      "text": "Dear {parent}, {student} missed {course} today ({date}). Regular practice matters before grading. See you next class!\n\n{academy}"
+    },
+    {
+      "type": "Event",
+      "name": "Grading / tournament",
+      "text": "Dear parents, {event} is on {date}. {details}\n\n{academy}"
+    }
+  ]
+}

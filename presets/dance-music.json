@@ -1,0 +1,57 @@
+{
+  "id": "dance-music",
+  "label": "Dance and music school",
+  "settings": {
+    "receipt_prefix": "RCPT",
+    "due_day": "5"
+  },
+  "categories": ["Dance", "Music – Vocal", "Music – Instrumental"],
+  "courses": [
+    { "category": "Dance", "name": "Bharatanatyam", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Dance", "name": "Western / Hip-hop", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Dance", "name": "Kuchipudi", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Music – Vocal", "name": "Carnatic Vocal", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Music – Vocal", "name": "Hindustani Vocal", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Music – Instrumental", "name": "Keyboard", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Music – Instrumental", "name": "Guitar", "monthly_fee": null, "classes_per_week": 2 },
+    { "category": "Music – Instrumental", "name": "Violin", "monthly_fee": null, "classes_per_week": 2 }
+  ],
+  "feePlans": [
+    { "name": "Monthly", "frequency": "Monthly", "months_covered": 1, "discount_pct": 0 },
+    { "name": "Quarterly", "frequency": "Quarterly", "months_covered": 3, "discount_pct": 5 },
+    { "name": "Half-yearly", "frequency": "HalfYearly", "months_covered": 6, "discount_pct": 10 }
+  ],
+  "chargeItems": [
+    { "name": "Admission fee", "default_amount": "", "applies_to": "Admission" },
+    { "name": "Costume", "default_amount": "", "applies_to": "Course" },
+    { "name": "Exam fee", "default_amount": "", "applies_to": "Course" },
+    { "name": "Annual day participation", "default_amount": "", "applies_to": "Any" }
+  ],
+  "expenseCategories": ["Rent", "Marketing", "Teacher fees", "Instruments & equipment", "Utilities", "Gateway fees", "Events", "Other"],
+  "customFields": [
+    { "entity": "Student", "key": "grade_level", "label": "Grade / level", "type": "text", "required": false },
+    { "entity": "Student", "key": "exam_board", "label": "Exam board", "type": "select", "options": ["None", "Trinity", "ABRSM", "Gandharva", "Other"], "required": false }
+  ],
+  "messageTemplates": [
+    {
+      "type": "FeeReminder",
+      "name": "Fee reminder",
+      "text": "Dear {parent}, the fee of ₹{balance} for {student} ({course}, {month}) is pending. Pay here: {payment_link}\n\nThank you,\n{academy}"
+    },
+    {
+      "type": "Receipt",
+      "name": "Payment receipt",
+      "text": "Dear {parent}, we received ₹{amount} for {student} ({course}, {month}). Receipt {receipt_no}: {receipt_link}\nBalance: ₹{balance}\n\n{academy}"
+    },
+    {
+      "type": "Absent",
+      "name": "Absent today",
+      "text": "Dear {parent}, {student} missed {course} today ({date}). Please ensure practice at home.\n\n{academy}"
+    },
+    {
+      "type": "Event",
+      "name": "Recital / annual day",
+      "text": "Dear parents, {event} is on {date}. {details}\n\n{academy}"
+    }
+  ]
+}

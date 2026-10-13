@@ -1,0 +1,56 @@
+@import 'tailwindcss';
+
+/* Tenant branding is injected at runtime (tenant/theme.ts); these are the PRD §4 defaults. */
+:root {
+  --tenant-primary: #0b1f3a;
+  --tenant-accent: #c9a227;
+  --tenant-background: #faf7f0;
+  --tenant-surface: #ffffff;
+  --tenant-font-heading: 'Playfair Display';
+  --tenant-font-body: 'Inter';
+}
+
+@theme inline {
+  --color-primary: var(--tenant-primary);
+  --color-primary-soft: color-mix(in srgb, var(--tenant-primary) 8%, white);
+  --color-accent: var(--tenant-accent);
+  --color-accent-soft: color-mix(in srgb, var(--tenant-accent) 15%, white);
+  --color-canvas: var(--tenant-background);
+  --color-surface: var(--tenant-surface);
+  --color-line: #e5e1d8;
+  --color-ink: #1c2433;
+  --color-muted: #6b7280;
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+
+  --font-heading: var(--tenant-font-heading), Georgia, 'Times New Roman', serif;
+  --font-sans: var(--tenant-font-body), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-canvas text-ink font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-heading text-primary;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}

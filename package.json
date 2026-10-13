@@ -1,0 +1,9 @@
+{
+  "name": "academy-erp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm run test:backend && npm --prefix frontend test",
+    "test:backend": "node --test tests/backend/backend.test.mjs tests/backend/fees.test.mjs"
+  }
+}

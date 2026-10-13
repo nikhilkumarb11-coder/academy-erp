@@ -1,0 +1,41 @@
+{
+  "slug": "rays",
+  "name": "Rays Academy",
+  "shortName": "Rays",
+  "apiUrl": "https://script.google.com/macros/s/AKfycbwvj8JkJict3uDDoCRIMG1RXwduv3q0A899iUo3lRgykVEQC6Mny3nO8Pdm7OAcJubT/exec",
+  "expectedApiVersion": 1,
+  "preset": "multi-activity",
+  "logo": "",
+  "theme": {
+    "primary": "#0B1F3A",
+    "accent": "#C9A227",
+    "background": "#FAF7F0",
+    "surface": "#FFFFFF",
+    "fontHeading": "Playfair Display",
+    "fontBody": "Inter"
+  },
+  "labels": {
+    "course": "Course",
+    "courses": "Courses",
+    "batch": "Batch",
+    "student": "Student",
+    "students": "Students",
+    "guardian": "Parent",
+    "guardians": "Parents",
+    "class": "Class"
+  },
+  "locale": {
+    "currency": "INR",
+    "currencySymbol": "₹",
+    "countryCode": "91",
+    "language": "en-IN",
+    "timezone": "Asia/Kolkata"
+  },
+  "modules": {
+    "attendance": true,
+    "onlinePayments": true,
+    "enquiries": true,
+    "expenses": true,
+    "finance": true
+  }
+}

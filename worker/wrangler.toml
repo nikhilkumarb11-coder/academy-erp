@@ -1,0 +1,9 @@
+name = "academy-erp-webhooks"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+# One entry per tenant. Secrets are added with:
+#   npx wrangler secret put RZP_WEBHOOK_SECRET_RAYS
+#   npx wrangler secret put FORWARD_TOKEN_RAYS
+TENANTS = '{"rays":{"appsScriptUrl":""},"demo":{"appsScriptUrl":""}}'
