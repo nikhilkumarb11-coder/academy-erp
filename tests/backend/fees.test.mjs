@@ -229,6 +229,29 @@ describe('payments', () => {
     assert.match(html, /Ravi Kumar/);
     assert.match(html, /Aarav/);
   });
+
+  it('brands the receipt with the logo, tagline, colours and contact footer', async () => {
+    await f.be.ok('settings.update', {
+      academy_name: 'Rays Academy',
+      academy_tagline: 'Building strong foundations',
+      contact_person: 'Prathima',
+      academy_phone: '8499987370',
+      academy_address: '11-13-981, Green Hills Colony',
+      logo_url: 'https://example.github.io/branding/rays/logo.png',
+      brand_primary: '#1B3358',
+      brand_accent: 'not-a-colour',
+    }, f.token);
+    const pay = await f.be.ok('payments.record', { parent_id: f.parentId, amount: 500, mode: 'Cash' }, f.token);
+    const { file } = await f.be.ok('receipts.get', { payment_id: pay.payment_id, withFile: true }, f.token);
+    const html = Buffer.from(file.base64, 'base64').toString();
+    assert.match(html, /RAYS ACADEMY/);
+    assert.match(html, /<img src="https:\/\/example\.github\.io\/branding\/rays\/logo\.png"/);
+    assert.match(html, /Building strong foundations/);
+    assert.match(html, /Contact:<\/b> Prathima · 8499987370/);
+    assert.match(html, /Address:<\/b> 11-13-981, Green Hills Colony/);
+    assert.match(html, /#1B3358/);
+    assert.doesNotMatch(html, /not-a-colour/);
+  });
 });
 
 describe('attendance', () => {

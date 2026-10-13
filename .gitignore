@@ -9,6 +9,7 @@ dist/
 frontend/public/tenants/
 frontend/public/presets/
 frontend/public/manifests/
+frontend/public/branding/
 frontend/dev-dist/
 
 # Per-tenant clasp state, registry and credentials
@@ -20,5 +21,6 @@ deploy/
 # Private source document
 Rays_Academy_PRD.md
 
+__pycache__/
 .DS_Store
 Thumbs.db

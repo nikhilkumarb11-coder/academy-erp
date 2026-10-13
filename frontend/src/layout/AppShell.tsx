@@ -2,7 +2,9 @@ import clsx from 'clsx';
 import { LogOut, MoreHorizontal } from 'lucide-react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
+import { AppLogo } from '../components/AppLogo';
 import { useTenant } from '../tenant/TenantContext';
+import { useBrandingSync } from '../tenant/useBrandingSync';
 import { GlobalSearch } from './GlobalSearch';
 import { SyncStatus } from './SyncStatus';
 import { VersionBanner } from './VersionBanner';
@@ -12,13 +14,7 @@ function Brand({ inverted }: { inverted?: boolean }) {
   const tenant = useTenant();
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      {tenant.logo ? (
-        <img src={tenant.logo} alt="" className="size-9 rounded-lg object-contain" />
-      ) : (
-        <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent font-heading text-lg font-bold text-primary">
-          {tenant.shortName.charAt(0)}
-        </div>
-      )}
+      <AppLogo className="size-10 rounded-xl text-lg" tile />
       <span className={clsx('truncate font-heading text-lg font-semibold', inverted ? 'text-white' : 'text-primary')}>{tenant.name}</span>
     </div>
   );
@@ -109,6 +105,7 @@ function BottomTabs() {
 }
 
 export function AppShell() {
+  useBrandingSync();
   return (
     <div className="flex min-h-dvh">
       <Sidebar />
@@ -143,11 +140,9 @@ export function AppShell() {
 
 function BrandCompact() {
   const tenant = useTenant();
-  return tenant.logo ? (
-    <img src={tenant.logo} alt={tenant.name} className="size-9 rounded-lg object-contain" />
-  ) : (
-    <div className="grid size-9 place-items-center rounded-lg bg-primary font-heading text-lg font-bold text-accent" aria-label={tenant.name}>
-      {tenant.shortName.charAt(0)}
-    </div>
+  return (
+    <span title={tenant.name}>
+      <AppLogo className="size-9 rounded-lg text-lg" tile={!!tenant.logo} />
+    </span>
   );
 }

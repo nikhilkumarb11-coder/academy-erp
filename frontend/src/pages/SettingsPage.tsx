@@ -9,8 +9,10 @@ import { useTenant } from '../tenant/TenantContext';
 
 const PROFILE_FIELDS: { key: string; label: string; hint?: string; type?: string; inputMode?: 'numeric' | 'tel' }[] = [
   { key: 'academy_name', label: 'Academy name', hint: 'Printed on receipts and messages' },
+  { key: 'academy_tagline', label: 'Tagline (optional)', hint: 'Shown under the name on receipts' },
   { key: 'academy_phone', label: 'Academy phone', type: 'tel', inputMode: 'tel' },
-  { key: 'academy_address', label: 'Address', hint: 'Printed on receipts' },
+  { key: 'contact_person', label: 'Contact person (optional)', hint: 'Receipt footer: "Contact: <name> · <phone>"' },
+  { key: 'academy_address', label: 'Address', hint: 'Printed at the bottom of receipts' },
   { key: 'academy_email', label: 'Academy email (optional)', type: 'email' },
   { key: 'gstin', label: 'GSTIN (optional)', hint: 'Shown on receipts when filled' },
   { key: 'receipt_prefix', label: 'Receipt number prefix', hint: 'e.g. RA gives RA/2026-27/0001' },
@@ -218,7 +220,7 @@ function StarterSetup() {
 export function SettingsPage() {
   return (
     <>
-      <PageHeader title="Settings" subtitle="Course master, templates and opening balances are added in later phases." />
+      <PageHeader title="Settings" subtitle="Academy profile, receipts and branding" />
       <div className="space-y-5">
         <StarterSetup />
         <ProfileSettings />

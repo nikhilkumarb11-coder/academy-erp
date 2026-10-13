@@ -32,7 +32,7 @@ export default defineConfig({
       // Manifests are per tenant (public/manifests/<slug>.webmanifest), linked at runtime.
       manifest: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,woff2,png}'],
         navigateFallback: 'index.html',
         runtimeCaching: [
           {

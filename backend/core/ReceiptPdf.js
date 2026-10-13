@@ -51,39 +51,83 @@ const ReceiptPdf = (() => {
     return { settings, parent, lines, advance, outstanding };
   }
 
+  const color = (value, fallback) => (/^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? String(value).trim() : fallback);
+
+  /**
+   * The academy logo as a data URI: the PDF converter does not load linked images reliably.
+   * Cached for 6 hours. Where fetching is unavailable (the in-browser demo) the link is used as is.
+   */
+  function logoSrc(url) {
+    if (!/^https:\/\/\S+$/.test(String(url || ''))) return '';
+    if (typeof UrlFetchApp === 'undefined') return url;
+    const cache = CacheService.getScriptCache();
+    const hit = cache.get('receipt_logo');
+    if (hit) {
+      const cached = JSON.parse(hit);
+      if (cached.url === url) return cached.src;
+    }
+    try {
+      const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+      if (res.getResponseCode() !== 200) return '';
+      const blob = res.getBlob();
+      const src = `data:${blob.getContentType() || 'image/png'};base64,${Utilities.base64Encode(blob.getBytes())}`;
+      if (src.length < 90000) cache.put('receipt_logo', JSON.stringify({ url, src }), 21600);
+      return src;
+    } catch (e) {
+      console.warn('Could not load the receipt logo', e && e.message);
+      return '';
+    }
+  }
+
   function html(payment) {
     const { settings, parent, lines, advance, outstanding } = data(payment);
     const cancelled = payment.status === 'Cancelled';
     const name = settings.academy_name || 'Academy';
-    const contact = [settings.academy_phone, settings.academy_email].filter(Boolean).join(' · ');
+    const primary = color(settings.brand_primary, '#0B1F3A');
+    const accent = color(settings.brand_accent, '#C9A227');
+    const logo = logoSrc(settings.logo_url);
+    const contactLine = [settings.contact_person, settings.academy_phone].filter(Boolean).join(' · ');
     const rows = lines.map((l) => `
       <tr><td>${esc(l.student)}</td><td>${esc(l.item)}</td><td>${esc(l.period)}</td><td class="r">${money(l.amount)}</td></tr>`).join('');
     const advanceRow = advance > 0 ? `<tr><td colspan="3">Advance (adjusted against future fees)</td><td class="r">${money(advance)}</td></tr>` : '';
 
     return `<!doctype html><html><head><meta charset="utf-8"><style>
       body { font-family: Arial, Helvetica, sans-serif; color: #1c2433; font-size: 12px; margin: 28px; }
-      .head { display: flex; justify-content: space-between; border-bottom: 3px solid #0B1F3A; padding-bottom: 10px; }
-      .badge { width: 46px; height: 46px; border-radius: 10px; background: #0B1F3A; color: #F5B700; font-size: 26px; font-weight: bold; text-align: center; line-height: 46px; display: inline-block; vertical-align: middle; margin-right: 10px; }
-      h1 { font-size: 20px; margin: 0; color: #0B1F3A; display: inline-block; vertical-align: middle; }
       .muted { color: #6b7280; }
-      h2 { font-size: 15px; letter-spacing: 2px; margin: 18px 0 8px; }
       table { width: 100%; border-collapse: collapse; margin-top: 8px; }
       th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #e5e1d8; }
       th { background: #f4f1ea; font-size: 11px; text-transform: uppercase; }
       .r { text-align: right; }
-      .total td { font-weight: bold; font-size: 14px; border-top: 2px solid #0B1F3A; }
+      table.head { margin: 0; }
+      .head td { border: none; padding: 0; vertical-align: middle; }
+      .head .logo { width: 84px; }
+      .badge { width: 64px; height: 64px; border-radius: 12px; background: ${primary}; color: ${accent}; font-size: 34px; font-weight: bold; text-align: center; line-height: 64px; }
+      .name { font-family: Georgia, 'Times New Roman', serif; font-size: 26px; font-weight: bold; letter-spacing: 1px; color: ${primary}; }
+      .tag { font-family: Georgia, 'Times New Roman', serif; font-style: italic; font-size: 12px; color: ${primary}; margin-top: 2px; }
+      .head .contact { text-align: right; font-size: 11px; color: #4b5563; line-height: 1.5; }
+      .rule { height: 3px; background: ${accent}; margin: 10px 0 0; }
+      h2 { font-size: 15px; letter-spacing: 3px; margin: 18px 0 8px; color: ${primary}; }
+      .total td { font-weight: bold; font-size: 14px; border-top: 2px solid ${primary}; }
       .meta td { border: none; padding: 2px 0; }
       .stamp { position: fixed; top: 38%; left: 18%; font-size: 72px; color: rgba(185,28,28,0.25); transform: rotate(-24deg); font-weight: bold; }
-      .foot { margin-top: 28px; font-size: 10px; }
+      .band { margin-top: 28px; background: ${primary}; color: #ffffff; padding: 10px 14px; font-size: 11px; line-height: 1.6; border-top: 3px solid ${accent}; }
+      .band b { color: ${accent}; }
+      .foot { margin-top: 8px; font-size: 10px; text-align: center; }
     </style></head><body>
       ${cancelled ? '<div class="stamp">CANCELLED</div>' : ''}
-      <div class="head">
-        <div><span class="badge">${esc(name.charAt(0))}</span><h1>${esc(name)}</h1>
-          <div class="muted" style="margin-top:6px">${esc(settings.academy_address)}</div>
-          <div class="muted">${esc(contact)}</div>
-          ${settings.gstin ? `<div class="muted">GSTIN: ${esc(settings.gstin)}</div>` : ''}
-        </div>
-      </div>
+      <table class="head"><tr>
+        <td class="logo">${logo ? `<img src="${esc(logo)}" width="72" height="72" alt="">` : `<div class="badge">${esc(name.charAt(0))}</div>`}</td>
+        <td>
+          <div class="name">${esc(name.toUpperCase())}</div>
+          ${settings.academy_tagline ? `<div class="tag">${esc(settings.academy_tagline)}</div>` : ''}
+        </td>
+        <td class="contact">
+          ${settings.academy_phone ? `${esc(settings.academy_phone)}<br>` : ''}
+          ${settings.academy_email ? `${esc(settings.academy_email)}<br>` : ''}
+          ${settings.gstin ? `GSTIN: ${esc(settings.gstin)}` : ''}
+        </td>
+      </tr></table>
+      <div class="rule"></div>
       <h2>FEE RECEIPT</h2>
       <table class="meta">
         <tr><td><b>Receipt no:</b> ${esc(payment.receipt_no)}</td><td class="r"><b>Date:</b> ${formatDate(payment.paid_at)}</td></tr>
@@ -98,7 +142,11 @@ const ReceiptPdf = (() => {
       <p><b>Balance outstanding for the family:</b> ${money(outstanding)}</p>
       ${cancelled ? `<p style="color:#b91c1c"><b>This receipt was cancelled:</b> ${esc(payment.cancel_reason)}</p>` : ''}
       ${payment.notes ? `<p class="muted">Note: ${esc(payment.notes)}</p>` : ''}
-      <div class="foot muted">${esc(settings.receipt_footer || '')}<br>This is a computer-generated receipt and needs no signature.</div>
+      ${settings.academy_address || contactLine ? `<div class="band">
+        ${settings.academy_address ? `<div><b>Address:</b> ${esc(settings.academy_address)}</div>` : ''}
+        ${contactLine ? `<div><b>Contact:</b> ${esc(contactLine)}</div>` : ''}
+      </div>` : ''}
+      <div class="foot muted">${settings.receipt_footer ? `${esc(settings.receipt_footer)}<br>` : ''}This is a computer-generated receipt and needs no signature.</div>
     </body></html>`;
   }
 

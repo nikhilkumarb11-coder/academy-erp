@@ -6,7 +6,15 @@
   "apiUrl": "https://script.google.com/macros/s/DEPLOYMENT_ID/exec",
   "expectedApiVersion": 1,
   "preset": "multi-activity",
+  "$branding": "Run: python scripts/make-branding.py <logo image> <slug> --emblem-only. Then set logo to branding/<slug>/logo.png and icons to branding/<slug>. Leave both empty to show the initial letter.",
   "logo": "",
+  "icons": "",
+  "tagline": "",
+  "profile": {
+    "academy_phone": "",
+    "contact_person": "",
+    "academy_address": ""
+  },
   "theme": {
     "primary": "#0B1F3A",
     "accent": "#C9A227",

@@ -36,7 +36,13 @@ export interface TenantConfig {
   apiUrl: string;
   expectedApiVersion: number;
   preset: string;
+  /** Square logo: a path under the site (e.g. "branding/rays/logo.png") or a full URL. Empty = initial letter. */
   logo: string;
+  /** Folder with icon-192.png, icon-512.png, maskable-512.png and apple-touch-icon.png for installing the app. */
+  icons?: string;
+  tagline?: string;
+  /** Public profile settings (address, phone, contact person, ...) filled in once when still empty. */
+  profile?: Record<string, string>;
   theme: TenantTheme;
   labels: TenantLabels;
   locale: TenantLocale;

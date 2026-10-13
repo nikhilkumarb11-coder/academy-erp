@@ -5,10 +5,17 @@
   "apiUrl": "https://script.google.com/macros/s/AKfycbwvj8JkJict3uDDoCRIMG1RXwduv3q0A899iUo3lRgykVEQC6Mny3nO8Pdm7OAcJubT/exec",
   "expectedApiVersion": 1,
   "preset": "multi-activity",
-  "logo": "",
+  "logo": "branding/rays/logo.png",
+  "icons": "branding/rays",
+  "tagline": "Building strong foundations for every student",
+  "profile": {
+    "academy_phone": "8499987370",
+    "contact_person": "Prathima Kammampati",
+    "academy_address": "11-13-981, Road No. 1, Green Hills Colony, Near Ashtalaxmi Temple, Kothapet, Hyderabad 500035"
+  },
   "theme": {
-    "primary": "#0B1F3A",
-    "accent": "#C9A227",
+    "primary": "#18314F",
+    "accent": "#FA7507",
     "background": "#FAF7F0",
     "surface": "#FFFFFF",
     "fontHeading": "Playfair Display",

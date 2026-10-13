@@ -1,3 +1,4 @@
+import { assetUrl } from './loadTenant';
 import type { TenantConfig } from './types';
 
 /** Applies tenant branding as CSS variables, loads its fonts, and links its PWA manifest. */
@@ -16,6 +17,34 @@ export function applyTenantBranding(tenant: TenantConfig) {
 
   loadGoogleFonts([t.fontHeading, t.fontBody]);
   linkManifest(tenant.slug);
+  if (tenant.icons) {
+    const dir = assetUrl(tenant.icons.endsWith('/') ? tenant.icons : `${tenant.icons}/`);
+    setLink('icon', `${dir}icon-192.png`, 'image/png');
+    setLink('apple-touch-icon', `${dir}apple-touch-icon.png`);
+    setMeta('apple-mobile-web-app-title', tenant.shortName || tenant.name);
+  }
+}
+
+function setLink(rel: string, href: string, type?: string) {
+  let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = rel;
+    document.head.appendChild(link);
+  }
+  if (type) link.type = type;
+  else link.removeAttribute('type');
+  link.href = href;
+}
+
+function setMeta(name: string, content: string) {
+  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.name = name;
+    document.head.appendChild(meta);
+  }
+  meta.content = content;
 }
 
 function loadGoogleFonts(families: string[]) {

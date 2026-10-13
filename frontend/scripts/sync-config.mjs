@@ -2,7 +2,7 @@
  * Copies ../tenants/*.json and ../presets/*.json into public/ (git-ignored copies) and
  * writes one PWA manifest per tenant so each academy installs with its own name and colours.
  */
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,18 +25,38 @@ function copyJsonDir(name, filter = () => true) {
 const tenants = copyJsonDir('tenants', (f) => !f.startsWith('_'));
 copyJsonDir('presets');
 
+// Logos and app icons (tenants/branding/<slug>/) are served as branding/<slug>/.
+const branding = join(repo, 'tenants', 'branding');
+if (existsSync(branding)) cpSync(branding, join(pub, 'branding'), { recursive: true });
+
+function iconsFor(t) {
+  const dir = t.icons ? t.icons.replace(/^\/|\/$/g, '') : '';
+  const has = (file) => dir && existsSync(join(pub, dir, file));
+  if (!has('icon-192.png') || !has('icon-512.png')) {
+    return [{ src: '../icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }];
+  }
+  const icons = [
+    { src: `../${dir}/icon-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: `../${dir}/icon-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+  ];
+  if (has('maskable-512.png')) icons.push({ src: `../${dir}/maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' });
+  return icons;
+}
+
 mkdirSync(join(pub, 'manifests'), { recursive: true });
 for (const f of tenants) {
   const t = JSON.parse(readFileSync(join(repo, 'tenants', f), 'utf8'));
   const manifest = {
     name: t.name,
     short_name: t.shortName || t.name,
+    description: t.tagline || `${t.name} management app`,
     start_url: `../${t.slug}/`,
     scope: `../${t.slug}/`,
     display: 'standalone',
+    orientation: 'portrait',
     background_color: t.theme?.background || '#FAF7F0',
     theme_color: t.theme?.primary || '#0B1F3A',
-    icons: [{ src: '../icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+    icons: iconsFor(t),
   };
   writeFileSync(join(pub, 'manifests', `${t.slug}.webmanifest`), JSON.stringify(manifest, null, 2));
 }

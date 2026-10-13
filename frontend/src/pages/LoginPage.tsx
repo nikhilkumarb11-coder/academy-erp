@@ -2,6 +2,8 @@ import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/errors';
+import { AppLogo } from '../components/AppLogo';
+import { InstallButton } from '../components/InstallApp';
 import { Alert, Button, Card } from '../components/ui';
 import { useTenant } from '../tenant/TenantContext';
 
@@ -29,14 +31,9 @@ export function LoginPage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-primary px-4 py-10">
       <div className="mb-8 text-center">
-        {tenant.logo ? (
-          <img src={tenant.logo} alt="" className="mx-auto mb-4 size-20 rounded-2xl object-contain" />
-        ) : (
-          <div className="mx-auto mb-4 grid size-20 place-items-center rounded-2xl bg-accent font-heading text-4xl font-bold text-primary">
-            {tenant.shortName.charAt(0)}
-          </div>
-        )}
+        <AppLogo className="mx-auto mb-4 size-24 rounded-3xl text-4xl" tile />
         <h1 className="text-3xl font-semibold text-white">{tenant.name}</h1>
+        {tenant.tagline && <p className="mt-1 font-heading text-sm italic text-accent">{tenant.tagline}</p>}
         <p className="mt-1 text-sm text-white/60">Management console</p>
       </div>
 
@@ -74,6 +71,7 @@ export function LoginPage() {
           </Button>
         </form>
       </Card>
+      <InstallButton variant="ghost" label="Install app on this device" className="mt-6 text-white hover:bg-white/10" />
     </div>
   );
 }

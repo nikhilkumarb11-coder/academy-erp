@@ -1,6 +1,7 @@
 import { ChevronRight, LogOut } from 'lucide-react';
 import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
+import { InstallButton } from '../components/InstallApp';
 import { Card, PageHeader } from '../components/ui';
 import { visibleNav } from '../layout/nav';
 import { useTenant } from '../tenant/TenantContext';
@@ -14,6 +15,7 @@ export function MorePage() {
   return (
     <>
       <PageHeader title="More" />
+      <InstallButton className="mb-4 w-full" label={`Install ${tenant.shortName} on this device`} />
       <Card className="divide-y divide-line p-0 sm:p-0">
         {items.map(({ to, label, icon: Icon }) => (
           <Link key={to} to={to} className="flex min-h-14 items-center gap-3 px-4 hover:bg-primary-soft">

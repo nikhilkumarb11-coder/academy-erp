@@ -1,6 +1,7 @@
 import { AlertTriangle, BookOpen, GraduationCap, TrendingUp, UserPlus, Users, Wallet } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router';
+import { InstallBanner } from '../components/InstallApp';
 import { Alert, Card, PageHeader, Spinner } from '../components/ui';
 import { useCoreData } from '../data/useCoreData';
 import { todayIso } from '../lib/dates';
@@ -76,6 +77,8 @@ export function DashboardPage() {
         }
       />
 
+      <InstallBanner />
+
       {stats.unpriced > 0 && (
         <div className="mb-4">
           <Alert tone="warning">
@@ -121,8 +124,6 @@ export function DashboardPage() {
           </ul>
         )}
       </Card>
-
-      <p className="mt-5 text-center text-xs text-muted">Attendance and finance cards are added in a later phase.</p>
     </>
   );
 }

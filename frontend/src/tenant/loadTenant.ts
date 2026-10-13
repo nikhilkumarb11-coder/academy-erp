@@ -13,6 +13,17 @@ export function tenantBasePath(slug: string): string {
   return `${BASE}${slug}`;
 }
 
+/** Site-relative asset paths (logos, icons) resolved against the deploy base; full URLs pass through. */
+export function assetUrl(path: string): string {
+  if (!path || /^(https?:|data:)/.test(path)) return path;
+  return `${BASE}${path.replace(/^\//, '')}`;
+}
+
+/** Absolute URL of an asset, for the server (receipt logo) which cannot resolve relative paths. */
+export function absoluteAssetUrl(path: string): string {
+  return path ? new URL(assetUrl(path), window.location.origin).href : '';
+}
+
 export async function loadTenant(slug: string): Promise<TenantConfig> {
   const res = await fetch(`${BASE}tenants/${slug}.json`, { cache: 'no-cache' });
   if (!res.ok) throw new Error(res.status === 404 ? 'NOT_FOUND' : `HTTP_${res.status}`);
