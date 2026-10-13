@@ -107,7 +107,18 @@ Messages leave the phone through wa.me links; the server only keeps templates, g
 The reminder queue is built on the device from cached dues; it skips families reminded in the last 3 days using `messages.recent`.
 
 ### Enquiries, expenses, finance (phase 5)
-`enquiries.save`, `enquiries.followups`, `enquiries.convert`, `expenses.save`, `expenseCategories.save`, `recurringExpenses.save`, `balanceItems.save`, `reports.dashboard`, `reports.pnl`, `reports.cashflow`, `reports.balanceSheet`, `export.csv`.
+Enquiries, Expenses, RecurringExpenses and BalanceItems are cached on the device, so the follow-up lists, P&L, cash flow, balance sheet, dashboard and CSV exports are computed in the browser (`frontend/src/lib/finance.ts`). There are no report actions.
+
+| Action | Payload | Returns |
+|---|---|---|
+| `enquiries.save` | `{ row: { id?, name, phone, course_interested ("CRS-1,CRS-2"), source, enquiry_date?, next_followup_date?, trial_date?, status, lost_reason (required when Lost), notes } }` | `{ changes: { Enquiries } }` |
+| `enquiries.delete` | `{ id }` | `{ changes: { Enquiries } }` (soft delete) |
+| `admissions.create` | existing payload plus optional `enquiry_id` | also marks the enquiry `Converted` with `converted_student_id` and returns it in `changes.Enquiries` |
+| `expenses.save` | `{ row: { id?, date?, category_id, amount, mode (Cash/UPI/Bank/Card), payee?, notes?, ref_id? } }` | `{ changes: { Expenses } }`. `ref_id` = `"<RecurringExpense id>:<yyyy-MM>"` records a recurring expense by hand; a second one for the same month is a `CONFLICT`. |
+| `expenses.delete` | `{ id }` | `{ changes: { Expenses } }` |
+| `catalog.save` / `catalog.delete` | tab `ExpenseCategories`, `RecurringExpenses` (category_id, amount, payee, day_of_month 1–28, auto_create, active, notes) or `BalanceItems` (type Asset/Liability, name, amount, as_of_date, notes) | as for other catalogue tabs. A category used by expenses cannot be deleted. |
+
+Recurring expenses with `auto_create` are added once a month on their day, by `createRecurringExpenses` and lazily on `system.bootstrap`/`system.sync` (at most once a day, `_meta.recurring_run_on`). Deleting an auto-added expense does not bring it back. The balance sheet counts fees received less expenses from `settings.opening_balances_date` (blank = all time).
 
 ## Time-driven triggers
 
@@ -116,7 +127,7 @@ The reminder queue is built on the device from cached dues; it skips families re
 | `generateMonthlyDues` | 1st of the month, 06:00 | 3 |
 | `reconcilePaymentLinks` | Every 15 minutes | 4 |
 | `dailyBackup` | Daily, 02:00 | 6 |
-| `createRecurringExpenses` | Daily, 03:00 | 5 |
+| `createRecurringExpenses` | Daily, 07:00 | 5 |
 
 ## Versioning
 

@@ -147,6 +147,7 @@ const PeopleApi = (() => {
       Fees.addChanges(changes, 'FeeDues', Db.insert('FeeDues', chargeRows, 'DUE'));
       Fees.mergeChanges(changes, billNewEnrollments(changes.Enrollments.map((e) => e.id)));
       Fees.mergeChanges(changes, Fees.applyCredit(parent.id));
+      if (payload.enquiry_id) Fees.addChanges(changes, 'Enquiries', EnquiriesApi.markConverted(String(payload.enquiry_id), changes.Students[0].id));
 
       Audit.log(
         'admission.create',

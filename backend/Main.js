@@ -75,6 +75,11 @@ function routes() {
 
     'messages.log': { handler: MessagesApi.log },
     'messages.recent': { handler: MessagesApi.recent },
+
+    'enquiries.save': { handler: EnquiriesApi.save },
+    'enquiries.delete': { handler: EnquiriesApi.remove },
+    'expenses.save': { handler: ExpensesApi.save },
+    'expenses.delete': { handler: ExpensesApi.remove },
   };
 }
 

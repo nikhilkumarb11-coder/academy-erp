@@ -131,4 +131,50 @@ export function seedDemo(call: Call, opts: { preset: { id: string }; academyName
   // One student on hold, to show how status affects billing.
   const onHold = boot.Students.find((s) => String(s.name).startsWith('Ethan'));
   if (onHold) api('students.setStatus', { id: onHold.id, status: 'On hold', reason: 'Exams' });
+
+  seedBusiness(api, today, boot.Courses);
+}
+
+const ENQUIRIES: [string, string, string, number, string, number | null][] = [
+  // name, phone, source, days ago, status, follow-up in days
+  ['Harsha', '9876500101', 'Walk-in', 1, 'New', 0],
+  ['Sneha', '9876500102', 'Social media', 4, 'Follow-up', -1],
+  ['Varun', '9876500103', 'Referral', 6, 'Trial', 2],
+  ['Pooja', '9876500104', 'Banner', 9, 'Follow-up', 3],
+  ['Nikhil', '9876500105', 'Phone call', 20, 'Lost', null],
+  ['Tara', '9876500106', 'Walk-in', 2, 'New', 1],
+];
+
+function seedBusiness(api: (action: string, payload?: unknown) => unknown, today: Date, courses: Row[]) {
+  ENQUIRIES.forEach(([name, phone, source, ago, status, follow], i) => {
+    api('enquiries.save', {
+      row: {
+        name, phone, source, status,
+        enquiry_date: iso(addDays(today, -ago)),
+        course_interested: courses[i % courses.length]?.id ?? '',
+        next_followup_date: follow === null ? '' : iso(addDays(today, follow)),
+        trial_date: status === 'Trial' ? iso(addDays(today, follow ?? 1)) : '',
+        lost_reason: status === 'Lost' ? 'Timings did not suit' : '',
+        notes: i === 1 ? 'Asked about weekend batches' : '',
+      },
+    });
+  });
+
+  const boot = api('system.bootstrap') as { ExpenseCategories: Row[] };
+  const cat = (name: string) => (boot.ExpenseCategories.find((c) => String(c.name).toLowerCase().includes(name)) ?? boot.ExpenseCategories[0]).id;
+  const rent = (api('catalog.save', { tab: 'RecurringExpenses', row: { category_id: cat('rent'), amount: 18000, payee: 'Landlord', day_of_month: 5, auto_create: true } }) as { changes: { RecurringExpenses: Row[] } }).changes.RecurringExpenses[0];
+  const salary = (api('catalog.save', { tab: 'RecurringExpenses', row: { category_id: cat('salar'), amount: 15000, payee: 'Karate coach', day_of_month: 1, auto_create: false } }) as { changes: { RecurringExpenses: Row[] } }).changes.RecurringExpenses[0];
+
+  [-2, -1, 0].forEach((offset) => {
+    const first = monthStart(today, offset);
+    const month = monthOf(first);
+    const on = (day: number) => iso(new Date(first.getFullYear(), first.getMonth(), day));
+    const past = (day: number) => offset < 0 || today.getDate() >= day;
+    if (past(5)) api('expenses.save', { row: { date: on(5), category_id: cat('rent'), amount: 18000, mode: 'Bank', payee: 'Landlord', ref_id: `${rent.id}:${month}` } });
+    if (offset < 0) api('expenses.save', { row: { date: on(1), category_id: cat('salar'), amount: 15000, mode: 'Bank', payee: 'Karate coach', ref_id: `${salary.id}:${month}` } });
+    if (past(10)) api('expenses.save', { row: { date: on(10), category_id: cat('utilit'), amount: 2400 + offset * 150, mode: 'UPI', payee: 'Electricity board' } });
+    if (offset === -1) api('expenses.save', { row: { date: on(14), category_id: cat('market'), amount: 3500, mode: 'Cash', payee: 'Flex banner printing', notes: 'Summer camp banners' } });
+  });
+  api('catalog.save', { tab: 'BalanceItems', row: { type: 'Asset', name: 'Mats and equipment', amount: 45000, as_of_date: iso(monthStart(today, -2)) } });
+  api('catalog.save', { tab: 'BalanceItems', row: { type: 'Asset', name: 'Rent deposit', amount: 50000, as_of_date: iso(monthStart(today, -2)) } });
 }

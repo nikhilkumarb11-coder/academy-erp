@@ -59,6 +59,7 @@ const BOOTSTRAP_TABS = [
   'Categories', 'Courses', 'Batches', 'FeePlans', 'ChargeItems', 'CustomFields',
   'Parents', 'Students', 'Enrollments', 'MessageTemplates', 'ExpenseCategories',
   'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays', 'WhatsAppGroups',
+  'Enquiries', 'Expenses', 'RecurringExpenses', 'BalanceItems',
 ];
 
 /** Default business settings; tenant presets may override, the owner edits them in the app. */
@@ -100,6 +101,9 @@ const STATUS = {
   paymentMode: ['Gateway', 'Cash', 'UPI', 'Bank'],
   manualPaymentMode: ['Cash', 'UPI', 'Bank'],
   enquiry: ['New', 'Follow-up', 'Trial', 'Converted', 'Lost'],
+  enquirySource: ['Walk-in', 'Phone call', 'Referral', 'Social media', 'Banner', 'Other'],
+  expenseMode: ['Cash', 'UPI', 'Bank', 'Card'],
+  balanceItem: ['Asset', 'Liability'],
   templateType: ['FeeReminder', 'Receipt', 'Absent', 'Event', 'NewCourse', 'Custom'],
   messageChannel: ['WhatsApp', 'Copy'],
   feePlanFrequency: ['Monthly', 'Quarterly', 'HalfYearly', 'Annual'],

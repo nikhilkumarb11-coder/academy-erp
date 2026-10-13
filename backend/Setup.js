@@ -29,6 +29,7 @@ function setupTenant() {
 function installTriggers() {
   const wanted = [
     { handler: 'generateMonthlyDues', build: (t) => t.timeBased().onMonthDay(1).atHour(6) },
+    { handler: 'createRecurringExpenses', build: (t) => t.timeBased().everyDays(1).atHour(7) },
     // { handler: 'reconcilePaymentLinks', build: (t) => t.timeBased().everyMinutes(15) },       // phase 4
     // { handler: 'dailyBackup', build: (t) => t.timeBased().everyDays(1).atHour(2) },           // phase 6
   ];

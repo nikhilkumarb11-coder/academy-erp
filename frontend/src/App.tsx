@@ -15,11 +15,14 @@ import { SettingsPage } from './pages/SettingsPage';
 import { AdmissionPage } from './pages/admissions/AdmissionPage';
 import { AttendancePage } from './pages/attendance/AttendancePage';
 import { CourseMasterPage } from './pages/courses/CourseMasterPage';
+import { EnquiriesPage } from './pages/enquiries/EnquiriesPage';
+import { ExpensesPage } from './pages/expenses/ExpensesPage';
 import { FamilyFeesPage } from './pages/fees/FamilyFeesPage';
 import { FeesPage } from './pages/fees/FeesPage';
 import { PaymentsPage } from './pages/fees/PaymentsPage';
 import { ReceiptPage } from './pages/fees/ReceiptPage';
 import { RemindersPage } from './pages/reminders/RemindersPage';
+import { ReportsPage } from './pages/reports/ReportsPage';
 import { StudentProfilePage } from './pages/students/StudentProfilePage';
 import { StudentsPage } from './pages/students/StudentsPage';
 import { TenantPickerPage } from './pages/TenantPickerPage';
@@ -48,6 +51,9 @@ function AppRoutes() {
         <Route path="receipts/:paymentId" element={<ReceiptPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="reminders" element={<RemindersPage />} />
+        <Route path="enquiries" element={<EnquiriesPage />} />
+        <Route path="expenses" element={<ExpensesPage />} />
+        <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="more" element={<MorePage />} />
         <Route path="*" element={<ComingSoonPage />} />

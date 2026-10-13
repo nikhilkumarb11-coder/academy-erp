@@ -22,5 +22,6 @@ deploy/
 Rays_Academy_PRD.md
 
 __pycache__/
+*.tsbuildinfo
 .DS_Store
 Thumbs.db

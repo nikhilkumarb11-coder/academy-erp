@@ -32,5 +32,6 @@ export function describePlanAmount(monthlyFee: number | null, plan: FeePlan | un
 }
 
 export function formatMoney(amount: number, symbol = '₹'): string {
-  return `${symbol}${Math.round(amount).toLocaleString('en-IN')}`;
+  const rounded = Math.round(amount);
+  return `${rounded < 0 ? '−' : ''}${symbol}${Math.abs(rounded).toLocaleString('en-IN')}`;
 }

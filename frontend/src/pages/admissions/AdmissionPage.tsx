@@ -67,6 +67,15 @@ export function AdmissionPage() {
   const [collectNow, setCollectNow] = useState(true);
 
   const t = data?.tables;
+  const enquiry = t?.Enquiries.find((q) => q.id === params.get('enquiry') && !isDeleted(q) && q.status !== 'Converted') ?? null;
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
+  if (enquiry && t && prefilledFrom !== enquiry.id) {
+    setPrefilledFrom(enquiry.id);
+    const courseIds = enquiry.course_interested.split(',').map((s) => s.trim())
+      .filter((id) => t.Courses.some((c) => c.id === id && bool(c.active)));
+    setParent((p) => ({ ...p, phone: enquiry.phone, notes: enquiry.notes }));
+    setChildren([{ ...emptyChild(), name: enquiry.name, enrollments: courseIds.map((id) => newEnrollmentDraft(id, plans)) }]);
+  }
   const existingParent = t?.Parents.find((p) => p.id === existingParentId) ?? null;
   const normalized = normalizePhone(parent.phone, locale.countryCode);
   const phoneMatch = !existingParent && normalized ? t?.Parents.find((p) => p.phone === normalized) ?? null : null;
@@ -123,6 +132,7 @@ export function AdmissionPage() {
   function submit(e: FormEvent) {
     e.preventDefault();
     const payload = {
+      enquiry_id: enquiry?.id,
       parent: existingParent ? { id: existingParent.id } : parent,
       students: children.map((c) => ({
         name: c.name,
@@ -155,6 +165,12 @@ export function AdmissionPage() {
   return (
     <form onSubmit={submit} className="pb-24 lg:pb-0">
       <PageHeader title="New admission" subtitle={`Add a ${labels.guardian.toLowerCase()} with one or more children`} />
+
+      {enquiry && (
+        <div className="mb-4">
+          <Alert tone="info">Filled in from the enquiry by {enquiry.name}. It will be marked converted when you save.</Alert>
+        </div>
+      )}
 
       <Card className="mb-4">
         <h2 className="mb-4 text-lg font-semibold">{labels.guardian}</h2>

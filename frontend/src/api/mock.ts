@@ -68,21 +68,26 @@ async function create(slug: string, presetId: string, academyName: string): Prom
 
 export function createMockTransport(slug: string, presetId: string, academyName: string): Transport {
   let statePromise: Promise<DemoState> | null = null;
+  let lastSaved: string | null = null;
 
+  /** Another tab may have written since our last request; its copy wins so tabs don't overwrite each other. */
   function load() {
+    const saved = localStorage.getItem(storageKey(slug));
+    if (saved && saved !== lastSaved) {
+      lastSaved = saved;
+      statePromise = Promise.resolve(deserialize(saved));
+    }
     if (!statePromise) {
       localStorage.removeItem(`erp:${slug}:mockdb`); // previous demo format
-      const saved = localStorage.getItem(storageKey(slug));
-      statePromise = saved
-        ? Promise.resolve(deserialize(saved))
-        : create(slug, presetId, academyName).then((s) => { save(s); return s; });
+      statePromise = create(slug, presetId, academyName).then((s) => { save(s); return s; });
     }
     return statePromise;
   }
 
   function save(state: DemoState) {
     try {
-      localStorage.setItem(storageKey(slug), serialize(state));
+      lastSaved = serialize(state);
+      localStorage.setItem(storageKey(slug), lastSaved);
     } catch {
       // Storage full: the demo keeps working for this session.
     }

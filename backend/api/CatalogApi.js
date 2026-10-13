@@ -143,6 +143,67 @@ const CatalogApi = (() => {
       },
     },
 
+    ExpenseCategories: {
+      prefix: 'ECT',
+      label: 'Expense category',
+      normalize(row) {
+        return {
+          name: Validate.text(row.name, 'name', { required: true, max: 60, label: 'Name' }),
+          sort_order: Validate.number(row.sort_order, 'sort_order', { label: 'Order' }),
+        };
+      },
+      check(row) {
+        Validate.unique('ExpenseCategories', 'name', row.name, { selfId: row.id, label: 'Category' });
+      },
+      inUse(id) {
+        const n = Db.where('Expenses', (e) => e.category_id === id).length + Db.where('RecurringExpenses', (r) => r.category_id === id).length;
+        return n ? `${n} expense(s) use it. Rename it instead.` : '';
+      },
+    },
+
+    RecurringExpenses: {
+      prefix: 'REC',
+      label: 'Recurring expense',
+      normalize(row) {
+        return {
+          category_id: Validate.text(row.category_id, 'category_id', { required: true, label: 'Category' }),
+          amount: Validate.number(row.amount, 'amount', { required: true, min: 1, max: 100000000, label: 'Amount' }),
+          payee: Validate.text(row.payee, 'payee', { required: true, max: 80, label: 'Paid to' }),
+          day_of_month: Validate.number(row.day_of_month, 'day_of_month', { required: true, min: 1, max: 28, integer: true, label: 'Day of month' }),
+          auto_create: Validate.bool(row.auto_create),
+          active: Validate.bool(row.active),
+          notes: Validate.text(row.notes, 'notes', { max: 300, label: 'Notes' }),
+        };
+      },
+      check(row) {
+        const cat = Db.find('ExpenseCategories', row.category_id);
+        if (!cat || Db.isDeleted(cat)) Validate.fail('category_id', 'Choose a valid category');
+      },
+      inUse() {
+        return '';
+      },
+    },
+
+    BalanceItems: {
+      prefix: 'BAL',
+      label: 'Balance item',
+      normalize(row) {
+        return {
+          type: Validate.oneOf(row.type, 'type', STATUS.balanceItem, { label: 'Type' }),
+          name: Validate.text(row.name, 'name', { required: true, max: 80, label: 'Name' }),
+          amount: Validate.number(row.amount, 'amount', { required: true, min: 0, max: 1000000000, label: 'Amount' }),
+          as_of_date: Validate.date(row.as_of_date || Util.today(), 'as_of_date', { required: true, label: 'As of' }),
+          notes: Validate.text(row.notes, 'notes', { max: 300, label: 'Notes' }),
+        };
+      },
+      check(row) {
+        Validate.unique('BalanceItems', 'name', row.name, { selfId: row.id, label: 'Item' });
+      },
+      inUse() {
+        return '';
+      },
+    },
+
     WhatsAppGroups: {
       prefix: 'WAG',
       label: 'Group',

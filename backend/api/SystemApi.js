@@ -10,6 +10,7 @@ const SystemApi = (() => {
   /** Everything the client caches at login (PRD §8 performance). */
   function bootstrap() {
     Migrate.ensureCurrent();
+    ExpensesApi.runRecurringIfDue();
     const data = { settings: Db.getMap('Settings'), serverTime: Util.nowIso() };
     BOOTSTRAP_TABS.forEach((tab) => { data[tab] = Db.all(tab); });
     return data;
@@ -19,6 +20,7 @@ const SystemApi = (() => {
   function sync(payload) {
     Util.requireFields(payload, ['since']);
     Migrate.ensureCurrent();
+    ExpensesApi.runRecurringIfDue();
     const data = { settings: Db.getMap('Settings'), serverTime: Util.nowIso() };
     BOOTSTRAP_TABS.forEach((tab) => { data[tab] = Db.changedSince(tab, payload.since); });
     return data;

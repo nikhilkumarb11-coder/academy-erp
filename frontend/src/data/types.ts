@@ -137,6 +137,59 @@ export interface ExpenseCategory extends Entity {
   sort_order: SheetNumber;
 }
 
+export type ExpenseMode = 'Cash' | 'UPI' | 'Bank' | 'Card';
+export const EXPENSE_MODES: ExpenseMode[] = ['Cash', 'UPI', 'Bank', 'Card'];
+
+export interface Expense extends Entity {
+  date: string;
+  category_id: string;
+  amount: SheetNumber;
+  mode: ExpenseMode;
+  payee: string;
+  notes: string;
+  source: 'Manual' | 'Recurring';
+  /** "<RecurringExpense id>:<yyyy-MM>" for entries from a recurring template. */
+  ref_id: string;
+}
+
+export interface RecurringExpense extends Entity {
+  category_id: string;
+  amount: SheetNumber;
+  payee: string;
+  day_of_month: SheetNumber;
+  auto_create: SheetBool;
+  active: SheetBool;
+  notes: string;
+}
+
+export interface BalanceItem extends Entity {
+  type: 'Asset' | 'Liability';
+  name: string;
+  amount: SheetNumber;
+  as_of_date: string;
+  notes: string;
+}
+
+export type EnquiryStatus = 'New' | 'Follow-up' | 'Trial' | 'Converted' | 'Lost';
+export const ENQUIRY_STATUSES: EnquiryStatus[] = ['New', 'Follow-up', 'Trial', 'Converted', 'Lost'];
+export const ENQUIRY_SOURCES = ['Walk-in', 'Phone call', 'Referral', 'Social media', 'Banner', 'Other'] as const;
+
+export interface Enquiry extends Entity {
+  name: string;
+  phone: string;
+  /** Course ids separated by commas. */
+  course_interested: string;
+  source: (typeof ENQUIRY_SOURCES)[number];
+  enquiry_date: string;
+  next_followup_date: string;
+  trial_date: string;
+  status: EnquiryStatus;
+  lost_reason: string;
+  notes: string;
+  converted_student_id: string;
+  extra: string;
+}
+
 export type DueStatus = 'Pending' | 'Partial' | 'Paid' | 'Waived';
 
 export interface FeeDue extends Timestamps {
@@ -237,6 +290,10 @@ export interface CoreTables {
   Receipts: Receipt[];
   Holidays: Holiday[];
   WhatsAppGroups: WhatsAppGroup[];
+  Enquiries: Enquiry[];
+  Expenses: Expense[];
+  RecurringExpenses: RecurringExpense[];
+  BalanceItems: BalanceItem[];
 }
 
 export type CoreTabName = keyof CoreTables;
@@ -245,6 +302,7 @@ export const CORE_TABS: CoreTabName[] = [
   'Categories', 'Courses', 'Batches', 'FeePlans', 'ChargeItems', 'CustomFields',
   'Parents', 'Students', 'Enrollments', 'MessageTemplates', 'ExpenseCategories',
   'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays', 'WhatsAppGroups',
+  'Enquiries', 'Expenses', 'RecurringExpenses', 'BalanceItems',
 ];
 
 /** Changes whenever the set of cached tabs changes, so caches from older builds are discarded. */
