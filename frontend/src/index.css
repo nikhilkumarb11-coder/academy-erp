@@ -51,6 +51,18 @@
   }
 }
 
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  body {
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
 @utility pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }

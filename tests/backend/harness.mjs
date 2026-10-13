@@ -22,7 +22,7 @@ const BACKEND_FILES = [
   'Main.js', 'Setup.js',
 ];
 const SOURCE = BACKEND_FILES.map((f) => `// ---- ${f}\n${readFileSync(join(repo, 'backend', f), 'utf8')}`).join('\n');
-const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db })';
+const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db, dailyBackup })';
 
 export function loadPreset(id) {
   return JSON.parse(readFileSync(join(repo, 'presets', `${id}.json`), 'utf8'));
@@ -247,7 +247,18 @@ function services(state) {
         if (!state.drive.folders[id]) throw new Error('No folder');
         return driveFolder(id);
       },
-      getFileById: (id) => ({ getBlob: () => fakeBlob(state.drive.files[id].bytes) }),
+      getFileById: (id) => {
+        if (id !== state.props.SPREADSHEET_ID && !state.drive.files[id]) throw new Error(`No file ${id}`);
+        return {
+          getBlob: () => fakeBlob(state.drive.files[id].bytes),
+          makeCopy: (name, folder) => {
+            const copyId = `file-${Object.keys(state.drive.files).length + 1}`;
+            state.drive.files[copyId] = { folderId: folder.getId(), name, copyOf: id, trashed: false };
+            return { getId: () => copyId, getUrl: () => `https://drive.example/${copyId}`, getName: () => name };
+          },
+          setTrashed: (v) => { state.drive.files[id].trashed = v; },
+        };
+      },
     },
     console: { log() {}, error: (...a) => state.errors.push(a.join(' ')), warn() {} },
   };

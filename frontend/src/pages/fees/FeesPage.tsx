@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { CalendarPlus, MessageCircle, Search, Wallet } from 'lucide-react';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { ExportButton } from '../../components/ExportButton';
 import { Button, Card, EmptyState, PageHeader, Spinner } from '../../components/ui';
 import { useCoreData } from '../../data/useCoreData';
 import { todayIso } from '../../lib/dates';
@@ -73,6 +74,7 @@ export function FeesPage() {
         subtitle="Who owes what, oldest first"
         actions={
           <>
+            <ExportButton list="dues" />
             <Button variant="secondary" onClick={() => setGenerating(true)}><CalendarPlus className="size-4" aria-hidden /> Generate dues</Button>
             <Link to="/payments" className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-primary-soft">Payments</Link>
           </>

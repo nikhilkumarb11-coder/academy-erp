@@ -93,5 +93,16 @@ const SystemApi = (() => {
     });
   }
 
-  return { ping, bootstrap, sync, migrate, updateSettings, seed };
+  /** system.backup -> { backup: { at, url, name }, status } */
+  function backup(payload, ctx) {
+    const entry = Backup.run('manual');
+    Db.withLock(() => Audit.log('system.backup', '_meta', entry.id, `Manual backup ${entry.name}`, ctx));
+    return { backup: entry, status: Backup.status() };
+  }
+
+  function backupStatus() {
+    return Backup.status();
+  }
+
+  return { ping, bootstrap, sync, migrate, updateSettings, seed, backup, backupStatus };
 })();

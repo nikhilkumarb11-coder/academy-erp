@@ -4,6 +4,6 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:backend && npm --prefix frontend test",
-    "test:backend": "node --test tests/backend/backend.test.mjs tests/backend/fees.test.mjs tests/backend/messages.test.mjs tests/backend/business.test.mjs"
+    "test:backend": "node --test tests/backend/backend.test.mjs tests/backend/fees.test.mjs tests/backend/messages.test.mjs tests/backend/business.test.mjs tests/backend/system.test.mjs"
   }
 }

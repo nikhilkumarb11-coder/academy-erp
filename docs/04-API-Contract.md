@@ -43,7 +43,9 @@ Status: ✅ implemented (phase 0) · ⏳ planned (phase shown).
 | `system.migrate` | ✓ | – | migration report | ✅ |
 | `system.seed` | ✓ | preset, force? | counts | ✅ |
 | `settings.update` | ✓ | {key: value} | settings | ✅ |
-| `system.backup` | ✓ | – | Drive URL of the copy | ⏳ 6 |
+| `system.backup` | ✓ | – | `{ backup: { id, url, name, at, kind }, status }` | ✅ |
+| `system.backupStatus` | ✓ | – | `{ last, count, keep }` | ✅ |
+| `import.students` | ✓ | see phase 6 | `{ results, summary, changes? }` | ✅ |
 
 ### Catalogue (phase 2)
 `categories.save`, `courses.save`, `courses.setActive`, `batches.save`, `feePlans.save`, `chargeItems.save`, `customFields.save`.
@@ -120,6 +122,11 @@ Enquiries, Expenses, RecurringExpenses and BalanceItems are cached on the device
 
 Recurring expenses with `auto_create` are added once a month on their day, by `createRecurringExpenses` and lazily on `system.bootstrap`/`system.sync` (at most once a day, `_meta.recurring_run_on`). Deleting an auto-added expense does not bring it back. The balance sheet counts fees received less expenses from `settings.opening_balances_date` (blank = all time).
 
+### Backups, import and export (phase 6)
+- **Backups.** `system.backup` copies the whole spreadsheet into the Drive folder in Script Property `BACKUP_FOLDER_ID` (created as "<Academy> - Backups" on first use). The newest 30 copies are kept and older ones go to the Drive trash. The list lives in `_meta.backups` (JSON). `dailyBackup` runs at 02:00 and skips when the last backup is under 20 hours old.
+- **Import.** `import.students { rows, commit, bill_current_month?, opening_due_date? }`, at most 500 rows. One row is one student: `guardian_name, phone, alt_phone, email, address, student_name, class, dob, gender, join_date, courses ("Karate; Abacus", matched by name), fee_plan (name; default the first active Monthly plan), opening_due, opening_due_note, notes`. Rows sharing a phone become one family. A phone already in Parents adds to that family, and a student name already in the family is a `duplicate`. Without `commit` nothing is written and each row gets `new_family | existing_family | duplicate | error` plus a message. With `commit`, valid rows are inserted under one lock. `opening_due` becomes a one-time due labelled "Opening balance" (or the note) on `opening_due_date` (default today). `bill_current_month` also bills this month's course fees. Custom fields are not imported.
+- **Export.** Done on the device from cached tables (`frontend/src/lib/exports.ts`): students, families, enrolments, fee dues, payments, expenses, enquiries and courses as CSV. Reports print to PDF through the browser's print dialog.
+
 ## Time-driven triggers
 
 | Function | Schedule | Phase |
@@ -128,6 +135,8 @@ Recurring expenses with `auto_create` are added once a month on their day, by `c
 | `reconcilePaymentLinks` | Every 15 minutes | 4 |
 | `dailyBackup` | Daily, 02:00 | 6 |
 | `createRecurringExpenses` | Daily, 07:00 | 5 |
+
+`installTriggers()` (run from the editor) installs every active trigger and removes stale ones.
 
 ## Versioning
 

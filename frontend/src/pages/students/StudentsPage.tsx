@@ -1,6 +1,7 @@
 import { Search, UserPlus } from 'lucide-react';
 import { useDeferredValue, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
+import { ExportButton } from '../../components/ExportButton';
 import { Button, Card, EmptyState, PageHeader, SelectField, Spinner, StatusBadge } from '../../components/ui';
 import type { StudentStatus } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
@@ -71,9 +72,12 @@ export function StudentsPage() {
         title={labels.students}
         subtitle={`${rows.length} shown · ${t.Students.filter((s) => s.status === 'Active').length} active`}
         actions={
-          <Button onClick={() => navigate('/admissions/new')}>
-            <UserPlus className="size-4" aria-hidden /> New admission
-          </Button>
+          <>
+            <ExportButton list="students" />
+            <Button onClick={() => navigate('/admissions/new')}>
+              <UserPlus className="size-4" aria-hidden /> New admission
+            </Button>
+          </>
         }
       />
 

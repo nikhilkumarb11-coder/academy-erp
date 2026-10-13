@@ -47,8 +47,9 @@ Send this to the owner. Items marked **blocking** hold up the phase shown. Every
 - [ ] Names of the parent WhatsApp groups (for the optional Groups list).
 
 ## Data migration (phase 6)
+Settings → Export and import → Import students takes a CSV with one row per student (download the template there).
 - [ ] Current student register (Excel, photos of pages, or a notebook) with parent name, phone, child name, class and courses.
-- [ ] Current pending dues per student (as of the go-live date).
+- [ ] Current pending dues per student (as of the go-live date) for the `opening_due` column.
 - [ ] Opening balances: cash in hand, bank balance, equipment value, deposits, loans.
 
 ## Access

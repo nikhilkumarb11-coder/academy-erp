@@ -1,5 +1,5 @@
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, useEffect, useMemo, useState, type ComponentType } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { ToastProvider } from './components/Toast';
@@ -11,20 +11,6 @@ import { ComingSoonPage } from './pages/ComingSoonPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { MorePage } from './pages/MorePage';
-import { SettingsPage } from './pages/SettingsPage';
-import { AdmissionPage } from './pages/admissions/AdmissionPage';
-import { AttendancePage } from './pages/attendance/AttendancePage';
-import { CourseMasterPage } from './pages/courses/CourseMasterPage';
-import { EnquiriesPage } from './pages/enquiries/EnquiriesPage';
-import { ExpensesPage } from './pages/expenses/ExpensesPage';
-import { FamilyFeesPage } from './pages/fees/FamilyFeesPage';
-import { FeesPage } from './pages/fees/FeesPage';
-import { PaymentsPage } from './pages/fees/PaymentsPage';
-import { ReceiptPage } from './pages/fees/ReceiptPage';
-import { RemindersPage } from './pages/reminders/RemindersPage';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { StudentProfilePage } from './pages/students/StudentProfilePage';
-import { StudentsPage } from './pages/students/StudentsPage';
 import { TenantPickerPage } from './pages/TenantPickerPage';
 import { loadTenant, slugFromLocation, tenantBasePath } from './tenant/loadTenant';
 import { TenantContext } from './tenant/TenantContext';
@@ -32,6 +18,27 @@ import { applyTenantBranding } from './tenant/theme';
 import type { TenantConfig } from './tenant/types';
 
 const CACHE_MAX_AGE = 7 * 24 * 3600_000;
+
+/** Route-level code splitting: each screen downloads on first visit (the service worker precaches them all). */
+function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+
+const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage');
+const ImportPage = page(() => import('./pages/settings/ImportPage'), 'ImportPage');
+const AdmissionPage = page(() => import('./pages/admissions/AdmissionPage'), 'AdmissionPage');
+const AttendancePage = page(() => import('./pages/attendance/AttendancePage'), 'AttendancePage');
+const CourseMasterPage = page(() => import('./pages/courses/CourseMasterPage'), 'CourseMasterPage');
+const EnquiriesPage = page(() => import('./pages/enquiries/EnquiriesPage'), 'EnquiriesPage');
+const ExpensesPage = page(() => import('./pages/expenses/ExpensesPage'), 'ExpensesPage');
+const FamilyFeesPage = page(() => import('./pages/fees/FamilyFeesPage'), 'FamilyFeesPage');
+const FeesPage = page(() => import('./pages/fees/FeesPage'), 'FeesPage');
+const PaymentsPage = page(() => import('./pages/fees/PaymentsPage'), 'PaymentsPage');
+const ReceiptPage = page(() => import('./pages/fees/ReceiptPage'), 'ReceiptPage');
+const RemindersPage = page(() => import('./pages/reminders/RemindersPage'), 'RemindersPage');
+const ReportsPage = page(() => import('./pages/reports/ReportsPage'), 'ReportsPage');
+const StudentProfilePage = page(() => import('./pages/students/StudentProfilePage'), 'StudentProfilePage');
+const StudentsPage = page(() => import('./pages/students/StudentsPage'), 'StudentsPage');
 
 function AppRoutes() {
   const { session } = useAuth();
@@ -55,6 +62,7 @@ function AppRoutes() {
         <Route path="expenses" element={<ExpensesPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings/import" element={<ImportPage />} />
         <Route path="more" element={<MorePage />} />
         <Route path="*" element={<ComingSoonPage />} />
       </Route>

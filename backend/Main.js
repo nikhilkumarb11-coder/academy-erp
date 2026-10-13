@@ -48,6 +48,9 @@ function routes() {
     'system.migrate': { handler: SystemApi.migrate },
     'system.seed': { handler: SystemApi.seed },
     'settings.update': { handler: SystemApi.updateSettings },
+    'system.backup': { handler: SystemApi.backup },
+    'system.backupStatus': { handler: SystemApi.backupStatus },
+    'import.students': { handler: ImportApi.run },
 
     'catalog.save': { handler: CatalogApi.save },
     'catalog.delete': { handler: CatalogApi.remove },

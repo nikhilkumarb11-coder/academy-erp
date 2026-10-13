@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, Download, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Printer, Settings2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { Button, Card, PageHeader, Spinner } from '../../components/ui';
@@ -26,8 +26,13 @@ export function ReportsPage() {
   if (isPending || !data) return <Spinner />;
   return (
     <>
-      <PageHeader title="Reports" subtitle="Income, expenses and what the academy owns" />
-      <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1" role="tablist">
+      <div className="print:hidden">
+        <PageHeader title="Reports" subtitle="Income, expenses and what the academy owns" />
+      </div>
+      <h1 className="mb-4 hidden text-xl font-semibold print:block">
+        {data.settings.academy_name} · {TABS.find((t) => t.key === tab)?.label}
+      </h1>
+      <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1 print:hidden" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key}
             onClick={() => setParams((p) => { if (t.key === 'pl') p.delete('tab'); else p.set('tab', t.key); return p; }, { replace: true })}
@@ -44,6 +49,16 @@ export function ReportsPage() {
 }
 
 const fyStart = (data: CoreData) => num(data.settings.fy_start_month, 4) || 4;
+
+/** "PDF" opens the print dialog; the app chrome is hidden in print, so "Save as PDF" gives a clean report. */
+function ExportButtons({ onCsv, className }: { onCsv: () => void; className?: string }) {
+  return (
+    <div className={clsx('flex gap-2 print:hidden', className)}>
+      <Button variant="ghost" onClick={onCsv}><Download className="size-4" aria-hidden /> CSV</Button>
+      <Button variant="ghost" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> PDF</Button>
+    </div>
+  );
+}
 
 function Stepper({ label, onPrev, onNext, nextDisabled }: { label: string; onPrev: () => void; onNext: () => void; nextDisabled: boolean }) {
   return (
@@ -121,7 +136,7 @@ function ProfitLoss({ data }: { data: CoreData }) {
         {mode === 'month'
           ? <Stepper label={monthLabel(month)} onPrev={() => setMonth((m) => addMonths(m, -1))} onNext={() => setMonth((m) => addMonths(m, 1))} nextDisabled={month >= today.slice(0, 7)} />
           : <Stepper label={period.label} onPrev={() => setFyOffset((o) => o - 1)} onNext={() => setFyOffset((o) => o + 1)} nextDisabled={fyOffset >= 0} />}
-        <Button variant="ghost" className="ml-auto" onClick={exportCsv}><Download className="size-4" aria-hidden /> CSV</Button>
+        <ExportButtons className="ml-auto" onCsv={exportCsv} />
       </div>
       <Card className="space-y-5">
         <Section title="Income (fees received)" lines={pl.income} total={pl.incomeTotal} totalLabel="Total income" empty="No fees received in this period." />
@@ -159,7 +174,7 @@ function CashFlow({ data }: { data: CoreData }) {
           <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-success" /> In</span>
           <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-danger/70" /> Out</span>
         </span>
-        <Button variant="ghost" className="ml-auto" onClick={exportCsv}><Download className="size-4" aria-hidden /> CSV</Button>
+        <ExportButtons className="ml-auto" onCsv={exportCsv} />
       </div>
       <Card className="!p-0">
         <div className="overflow-x-auto">
@@ -220,9 +235,9 @@ function Balance({ data }: { data: CoreData }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-sm text-muted">As of {formatDate(today)}{bs.since && ` · cash counted from ${formatDate(bs.since)}`}</p>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2 print:hidden">
           <Button variant="ghost" onClick={() => setManaging(true)}><Settings2 className="size-4" aria-hidden /> Assets & loans</Button>
-          <Button variant="ghost" onClick={exportCsv}><Download className="size-4" aria-hidden /> CSV</Button>
+          <ExportButtons onCsv={exportCsv} />
         </div>
       </div>
       <Card className="space-y-5">

@@ -360,25 +360,25 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
       ) : (
         <>
           <p className="mb-2 text-sm text-muted">{rows.days} class day{rows.days === 1 ? '' : 's'} marked in {monthLabel(month)}. Below 75% is highlighted.</p>
-          <Card className="p-0 sm:p-0">
+          <Card className="overflow-x-auto p-0 sm:p-0">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">{labels.student}</th>
-                  <th className="px-2 py-2.5 text-center font-medium">P</th>
-                  <th className="px-2 py-2.5 text-center font-medium">A</th>
-                  <th className="px-2 py-2.5 text-center font-medium">L</th>
-                  <th className="px-4 py-2.5 text-right font-medium">%</th>
+                  <th className="px-3 py-2.5 font-medium sm:px-4">{labels.student}</th>
+                  <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">P</th>
+                  <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">A</th>
+                  <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">L</th>
+                  <th className="px-3 py-2.5 text-right font-medium sm:px-4">%</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {rows.list.map((r) => (
                   <tr key={r.id}>
-                    <td className="truncate px-4 py-2.5 font-medium">{r.name}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums">{r.Present}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums">{r.Absent}</td>
-                    <td className="px-2 py-2.5 text-center tabular-nums">{r.Leave}</td>
-                    <td className={clsx('px-4 py-2.5 text-right font-semibold tabular-nums', r.pct !== null && r.pct < 75 && 'text-danger')}>{r.pct === null ? '—' : `${r.pct}%`}</td>
+                    <td className="px-3 py-2.5 font-medium sm:px-4">{r.name}</td>
+                    <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Present}</td>
+                    <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Absent}</td>
+                    <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Leave}</td>
+                    <td className={clsx('px-3 py-2.5 text-right font-semibold tabular-nums sm:px-4', r.pct !== null && r.pct < 75 && 'text-danger')}>{r.pct === null ? '—' : `${r.pct}%`}</td>
                   </tr>
                 ))}
               </tbody>

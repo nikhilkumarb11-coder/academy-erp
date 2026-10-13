@@ -43,7 +43,7 @@ In the Apps Script editor, open Project Settings → Script Properties and add:
 | `SPREADSHEET_ID` | from step 3 |
 | `INITIAL_PASSWORD` | a strong temporary password (deleted automatically) |
 | `RECEIPTS_FOLDER_ID` | from step 3 (phase 3) |
-| `BACKUP_FOLDER_ID` | from step 3 (phase 6) |
+| `BACKUP_FOLDER_ID` | optional: the `Backups` folder from step 3. If blank, the first backup creates "<Academy> - Backups" and saves its ID here. |
 | `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` | the tenant's keys (phase 4) |
 | `FORWARD_TOKEN` | a random 40+ character string, the same as the Worker secret (phase 4) |
 

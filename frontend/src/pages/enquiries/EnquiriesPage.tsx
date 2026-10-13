@@ -2,10 +2,12 @@ import clsx from 'clsx';
 import { MessageCircle, Phone, Plus, Search, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { ExportButton } from '../../components/ExportButton';
 import { EmptyState, PageHeader, Spinner, StatusBadge, Button, Card } from '../../components/ui';
-import type { CoreTables, Enquiry } from '../../data/types';
+import type { Enquiry } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
 import { formatDate, todayIso } from '../../lib/dates';
+import { courseNames, isOpenEnquiry, needsFollowUp } from '../../lib/enquiries';
 import { formatPhone } from '../../lib/phone';
 import { isDeleted } from '../../lib/values';
 import { whatsappUrl } from '../../lib/whatsapp';
@@ -20,15 +22,6 @@ const VIEWS: { key: View; label: string }[] = [
   { key: 'lost', label: 'Lost' },
   { key: 'all', label: 'All' },
 ];
-
-export const isOpenEnquiry = (q: Enquiry) => q.status !== 'Converted' && q.status !== 'Lost';
-/** Open enquiries whose follow-up (or trial) date has arrived; those without a date count from the day they came in. */
-export const needsFollowUp = (q: Enquiry, today: string) =>
-  isOpenEnquiry(q) && (q.next_followup_date || q.trial_date || q.enquiry_date) <= today;
-
-export function courseNames(t: Pick<CoreTables, 'Courses'>, ids: string): string {
-  return ids.split(',').map((id) => t.Courses.find((c) => c.id === id.trim())?.name).filter(Boolean).join(', ');
-}
 
 export function EnquiriesPage() {
   const { data, isPending } = useCoreData();
@@ -75,7 +68,7 @@ export function EnquiriesPage() {
       <PageHeader
         title="Enquiries"
         subtitle={decided ? `${Math.round((converted / decided) * 100)}% of closed enquiries joined` : 'Track walk-ins and calls until they join'}
-        actions={<Button onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden /> Add enquiry</Button>}
+        actions={<><ExportButton list="enquiries" /><Button onClick={() => setEditing('new')}><Plus className="size-4" aria-hidden /> Add enquiry</Button></>}
       />
 
       <div className="mb-3 flex flex-wrap gap-2">

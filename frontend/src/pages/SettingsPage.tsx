@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
-import { useLocation } from 'react-router';
+import { Download, Upload } from 'lucide-react';
+import { Link, useLocation } from 'react-router';
 import { TemplatesSettings } from './reminders/TemplatesSettings';
+import { todayIso } from '../lib/dates';
+import { EXPORTS, exportList } from '../lib/exports';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/errors';
 import { Alert, Button, Card, Field, PageHeader } from '../components/ui';
@@ -172,6 +175,89 @@ function DataSettings() {
   );
 }
 
+interface BackupEntry {
+  id: string;
+  url: string;
+  name: string;
+  at: string;
+  kind: 'manual' | 'daily';
+}
+
+interface BackupStatus {
+  last: BackupEntry | null;
+  count: number;
+  keep: number;
+}
+
+function BackupSettings() {
+  const tenant = useTenant();
+  const { api } = useAuth();
+  const queryClient = useQueryClient();
+  const key = ['backupStatus', tenant.slug];
+  const status = useQuery({ queryKey: key, queryFn: () => api<BackupStatus>('system.backupStatus') });
+  const backup = useMutation({
+    mutationFn: () => api<{ backup: BackupEntry; status: BackupStatus }>('system.backup'),
+    onSuccess: (res) => queryClient.setQueryData(key, res.status),
+  });
+  const last = status.data?.last;
+
+  return (
+    <Card>
+      <h2 className="mb-1 text-lg font-semibold">Backups</h2>
+      <p className="mb-4 text-sm text-muted">
+        A full copy of the academy spreadsheet is saved to your Google Drive every night at 2 AM.
+        The newest {status.data?.keep ?? 30} copies are kept; older ones move to the Drive trash.
+      </p>
+      <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt className="text-muted">Last backup</dt>
+        <dd className="font-medium">
+          {status.isPending ? '…' : last ? (
+            <>
+              {new Date(last.at).toLocaleString()} <span className="text-muted">({last.kind})</span>
+              {last.url && (
+                <>
+                  {' · '}
+                  <a href={last.url} target="_blank" rel="noreferrer" className="text-accent underline">Open copy</a>
+                </>
+              )}
+            </>
+          ) : 'Never'}
+        </dd>
+        <dt className="text-muted">Copies kept</dt>
+        <dd className="font-medium tabular-nums">{status.data?.count ?? '…'}</dd>
+      </dl>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" loading={backup.isPending} onClick={() => backup.mutate()}>Back up now</Button>
+        {backup.isSuccess && <span className="text-sm text-success">Backup saved</span>}
+      </div>
+      {(backup.error || status.error) && <div className="mt-3"><Alert>{errorMessage(backup.error ?? status.error)}</Alert></div>}
+    </Card>
+  );
+}
+
+function ExportImportSettings() {
+  const { data } = useCoreData();
+  return (
+    <div id="data-export"><Card>
+      <h2 className="mb-1 text-lg font-semibold">Export and import</h2>
+      <p className="mb-4 text-sm text-muted">Download any list as a CSV file that opens in Excel or Google Sheets.</p>
+      <div className="mb-5 flex flex-wrap gap-2">
+        {EXPORTS.map((e) => (
+          <Button key={e.id} variant="secondary" disabled={!data} onClick={() => data && exportList(e.id, data.tables, data.settings, todayIso())}>
+            <Download className="size-4" aria-hidden /> {e.label}
+          </Button>
+        ))}
+      </div>
+      <p className="mb-3 text-sm text-muted">
+        Moving from a register or another app? Import families, students, their courses and pending fees from a CSV file.
+      </p>
+      <Link to="/settings/import" className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white">
+        <Upload className="size-4" aria-hidden /> Import students
+      </Link>
+    </Card></div>
+  );
+}
+
 interface SeedResult {
   preset: string;
   categories: number;
@@ -233,6 +319,8 @@ export function SettingsPage() {
         <ProfileSettings />
         <TemplatesSettings />
         <PasswordSettings />
+        <BackupSettings />
+        <ExportImportSettings />
         <DataSettings />
       </div>
     </>

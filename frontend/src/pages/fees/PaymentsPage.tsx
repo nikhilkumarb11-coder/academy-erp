@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { ExportButton } from '../../components/ExportButton';
 import { Card, EmptyState, PageHeader, SelectField, Spinner, StatusBadge } from '../../components/ui';
 import type { PaymentMode } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
@@ -45,7 +46,7 @@ export function PaymentsPage() {
 
   return (
     <>
-      <PageHeader title="Payments" subtitle={`${recorded.length} receipts in ${monthLabel(month)}`} />
+      <PageHeader title="Payments" subtitle={`${recorded.length} receipts in ${monthLabel(month)}`} actions={<ExportButton list="payments" />} />
       <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_auto]">
         <SelectField label="Month" className="[&>span]:sr-only" value={month} onChange={(e) => set('month', e.target.value, thisMonth)}>
           {months.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}

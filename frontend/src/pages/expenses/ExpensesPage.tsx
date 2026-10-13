@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Plus, Repeat, Tags } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ExportButton } from '../../components/ExportButton';
 import { Button, Card, EmptyState, PageHeader, Spinner } from '../../components/ui';
 import { useCoreData } from '../../data/useCoreData';
 import { addMonths, formatDate, monthLabel, todayIso } from '../../lib/dates';
@@ -45,7 +46,7 @@ export function ExpensesPage() {
       <PageHeader
         title="Expenses"
         subtitle="Where the money goes"
-        actions={<Button onClick={() => setOpen({ kind: 'expense', draft: {} })}><Plus className="size-4" aria-hidden /> Record expense</Button>}
+        actions={<><ExportButton list="expenses" /><Button onClick={() => setOpen({ kind: 'expense', draft: {} })}><Plus className="size-4" aria-hidden /> Record expense</Button></>}
       />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

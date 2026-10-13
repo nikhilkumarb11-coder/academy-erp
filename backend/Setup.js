@@ -30,8 +30,8 @@ function installTriggers() {
   const wanted = [
     { handler: 'generateMonthlyDues', build: (t) => t.timeBased().onMonthDay(1).atHour(6) },
     { handler: 'createRecurringExpenses', build: (t) => t.timeBased().everyDays(1).atHour(7) },
+    { handler: 'dailyBackup', build: (t) => t.timeBased().everyDays(1).atHour(2) },
     // { handler: 'reconcilePaymentLinks', build: (t) => t.timeBased().everyMinutes(15) },       // phase 4
-    // { handler: 'dailyBackup', build: (t) => t.timeBased().everyDays(1).atHour(2) },           // phase 6
   ];
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
   wanted.forEach((w) => w.build(ScriptApp.newTrigger(w.handler)).create());

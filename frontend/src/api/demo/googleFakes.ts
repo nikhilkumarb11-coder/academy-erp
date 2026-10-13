@@ -244,7 +244,16 @@ export function googleServices(state: DemoState) {
       Permission: { VIEW: 'VIEW' },
       createFolder: () => folder('demo-folder'),
       getFolderById: (id: string) => folder(id),
-      getFileById: (id: string) => ({ getBlob: () => blobOf(state.files[id]?.html ?? '') }),
+      getFileById: (id: string) => ({
+        getBlob: () => blobOf(state.files[id]?.html ?? ''),
+        // A demo "backup" records only its name; copying the whole demo spreadsheet would fill localStorage.
+        makeCopy: (name: string) => {
+          const fileId = `demo-backup-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+          state.files[fileId] = { name, html: '' };
+          return { getId: () => fileId, getUrl: () => '', getName: () => name };
+        },
+        setTrashed: () => { delete state.files[id]; },
+      }),
     },
   };
 }

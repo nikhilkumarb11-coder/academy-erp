@@ -1,8 +1,10 @@
 import clsx from 'clsx';
 import { LogOut, MoreHorizontal } from 'lucide-react';
+import { Suspense } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { AppLogo } from '../components/AppLogo';
+import { Spinner } from '../components/ui';
 import { useTenant } from '../tenant/TenantContext';
 import { useBrandingSync } from '../tenant/useBrandingSync';
 import { GlobalSearch } from './GlobalSearch';
@@ -25,7 +27,7 @@ function Sidebar() {
   const { logout } = useAuth();
   const items = visibleNav(tenant.modules);
   return (
-    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-primary px-3 py-5 lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col bg-primary px-3 py-5 lg:flex print:hidden">
       <div className="px-2 pb-6">
         <Brand inverted />
       </div>
@@ -68,7 +70,7 @@ function BottomTabs() {
   return (
     <nav
       aria-label="Main"
-      className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden"
+      className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden print:hidden"
     >
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
         {tabs.map(({ to, label, icon: Icon }) => (
@@ -110,7 +112,7 @@ export function AppShell() {
     <div className="flex min-h-dvh">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur print:hidden">
           <div className="flex items-center gap-3 px-4 py-2.5 lg:px-8">
             <div className="lg:hidden">
               <BrandCompact />
@@ -127,9 +129,11 @@ export function AppShell() {
           </div>
           <VersionBanner />
         </header>
-        <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-10">
+        <main className="flex-1 px-4 pb-28 pt-5 lg:px-8 lg:pb-10 print:p-0">
           <div className="mx-auto max-w-6xl">
-            <Outlet />
+            <Suspense fallback={<Spinner />}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>

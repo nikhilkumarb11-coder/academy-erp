@@ -12,7 +12,7 @@ import { addDaysIso, formatDate, todayIso } from '../lib/dates';
 import { collected, dueNet, familySummaries, isOpenDue } from '../lib/ledger';
 import { bool, isDeleted, num } from '../lib/values';
 import { useLabels, useTenant } from '../tenant/TenantContext';
-import { isOpenEnquiry, needsFollowUp } from './enquiries/EnquiriesPage';
+import { isOpenEnquiry, needsFollowUp } from '../lib/enquiries';
 import { useMoney } from './fees/feeShared';
 
 const LOW_ATTENDANCE = 0.75;
