@@ -100,10 +100,14 @@ def main():
     print(f'source {Image.open(source).size}, emblem {emblem.size}')
 
     white = (255, 255, 255, 255)
-    square(emblem, 512, 0.96).save(out / 'logo.png', optimize=True)
+    def small(img):
+        return img.quantize(256, method=Image.Quantize.FASTOCTREE)
+
+    # Receipts embed logo.png inline, so keep it well under the backend's 90 KB cache limit.
+    small(square(emblem, 256, 0.96)).save(out / 'logo.png', optimize=True)
     for size in (192, 512):
-        square(emblem, size, 0.80, white, radius=0.22).save(out / f'icon-{size}.png', optimize=True)
-    square(emblem, 512, 0.66, white).save(out / 'maskable-512.png', optimize=True)
+        small(square(emblem, size, 0.80, white, radius=0.22)).save(out / f'icon-{size}.png', optimize=True)
+    small(square(emblem, 512, 0.66, white)).save(out / 'maskable-512.png', optimize=True)
     square(emblem, 180, 0.80, white).convert('RGB').save(out / 'apple-touch-icon.png', optimize=True)
     print('colours (most common first):', ', '.join(brand_colours(emblem)))
     print(f'written to {out}')
