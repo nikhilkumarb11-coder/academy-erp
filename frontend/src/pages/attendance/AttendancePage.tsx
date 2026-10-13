@@ -9,6 +9,7 @@ import { fieldError } from '../../api/fieldErrors';
 import { Sheet } from '../../components/Sheet';
 import { useToast } from '../../components/Toast';
 import { Alert, Button, Card, EmptyState, Field, PageHeader, SelectField, Spinner } from '../../components/ui';
+import { activeCourses, attendanceDayQuery, attendanceMonthQuery, defaultAttendanceCourse, LAST_COURSE } from '../../data/attendance';
 import type { AttendanceMark, AttendanceStatus, CoreTables, Holiday } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
 import { useLogMessages } from '../../data/useMessages';
@@ -24,8 +25,6 @@ const STATES: { status: AttendanceStatus; short: string; on: string }[] = [
   { status: 'Absent', short: 'A', on: 'border-danger bg-danger text-white' },
   { status: 'Leave', short: 'L', on: 'border-warning bg-warning text-white' },
 ];
-const LAST_COURSE = 'erp:attendance:course';
-
 /** Students enrolled in a course on a date (active, started, not ended), optionally one batch. */
 function rosterFor(t: CoreTables, courseId: string, batchId: string, date: string) {
   const students = new Map(t.Students.map((s) => [s.id, s]));
@@ -44,7 +43,7 @@ export function AttendancePage() {
   const tab = params.get('tab') === 'report' ? 'report' : 'mark';
 
   if (isPending || !data) return <Spinner />;
-  const courses = data.tables.Courses.filter((c) => bool(c.active) && !isDeleted(c)).sort((a, b) => a.name.localeCompare(b.name));
+  const courses = activeCourses(data.tables);
 
   return (
     <>
@@ -78,8 +77,7 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
   const logMessages = useLogMessages();
   const [params, setParams] = useSearchParams();
   const today = todayIso();
-  const saved = localStorage.getItem(`${LAST_COURSE}:${tenant.slug}`) ?? '';
-  const courseId = params.get('course') ?? (courses.some((c) => c.id === saved) ? saved : courses[0].id);
+  const courseId = params.get('course') ?? defaultAttendanceCourse(t, tenant.slug);
   const batchId = params.get('batch') ?? '';
   const date = params.get('date') ?? today;
   const [edits, setEdits] = useState<{ key: string; marks: Record<string, Mark> }>({ key: '', marks: {} });
@@ -96,12 +94,9 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
       return p;
     }, { replace: true });
 
-  const marksKey = ['attendance', tenant.slug, courseId, date] as const;
-  const marksQuery = useQuery({
-    queryKey: marksKey,
-    queryFn: () => api<{ marks: AttendanceMark[] }>('attendance.day', { course_id: courseId, date }),
-    staleTime: 30_000,
-  });
+  const marksOptions = attendanceDayQuery(api, tenant.slug, courseId, date);
+  const marksKey = marksOptions.queryKey;
+  const marksQuery = useQuery(marksOptions);
 
   const course = courses.find((c) => c.id === courseId);
   const batches = t.Batches.filter((b) => b.course_id === courseId && bool(b.active) && !isDeleted(b));
@@ -245,7 +240,7 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
       )}
 
       {changed.length > 0 && (
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface/95 p-3 backdrop-blur lg:static lg:mt-4 lg:border-0 lg:bg-transparent lg:p-0">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface p-3 lg:static lg:mt-4 lg:border-0 lg:bg-transparent lg:p-0">
           <div className="mx-auto flex max-w-3xl items-center gap-3">
             <p className="flex-1 text-sm text-muted">{changed.length} change{changed.length === 1 ? '' : 's'}</p>
             <Button variant="ghost" onClick={() => setEdits({ key: '', marks: {} })}>Undo</Button>
@@ -315,10 +310,7 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
   const [month, setMonth] = useState(thisMonth);
   const [courseId, setCourseId] = useState(courses[0].id);
 
-  const report = useQuery({
-    queryKey: ['attendance-report', tenant.slug, month, courseId],
-    queryFn: () => api<{ rows: AttendanceMark[] }>('attendance.report', { month, course_id: courseId }),
-  });
+  const report = useQuery(attendanceMonthQuery(api, tenant.slug, month, courseId));
 
   const rows = useMemo(() => {
     const marks = report.data?.rows ?? [];

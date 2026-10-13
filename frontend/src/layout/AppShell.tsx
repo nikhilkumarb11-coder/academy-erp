@@ -70,7 +70,7 @@ function BottomTabs() {
   return (
     <nav
       aria-label="Main"
-      className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden print:hidden"
+      className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface lg:hidden print:hidden"
     >
       <div className="mx-auto grid max-w-lg" style={{ gridTemplateColumns: `repeat(${tabs.length + 1}, minmax(0, 1fr))` }}>
         {tabs.map(({ to, label, icon: Icon }) => (
@@ -112,7 +112,7 @@ export function AppShell() {
     <div className="flex min-h-dvh">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur print:hidden">
+        <header className="sticky top-0 z-20 border-b border-line bg-surface print:hidden">
           <div className="flex items-center gap-3 px-4 py-2.5 lg:px-8">
             <div className="lg:hidden">
               <BrandCompact />

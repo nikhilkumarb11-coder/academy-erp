@@ -6,22 +6,35 @@ import { ToastProvider } from './components/Toast';
 import { FullScreenMessage, Spinner } from './components/ui';
 import { createQueryClient, idbPersister } from './data/queryClient';
 import { CACHE_SHAPE } from './data/types';
+import { useWarmData } from './data/useWarmData';
 import { AppShell } from './layout/AppShell';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
 import { MorePage } from './pages/MorePage';
 import { TenantPickerPage } from './pages/TenantPickerPage';
-import { loadTenant, slugFromLocation, tenantBasePath } from './tenant/loadTenant';
+import { cachedTenant, loadTenant, slugFromLocation, tenantBasePath } from './tenant/loadTenant';
 import { TenantContext } from './tenant/TenantContext';
 import { applyTenantBranding } from './tenant/theme';
 import type { TenantConfig } from './tenant/types';
 
 const CACHE_MAX_AGE = 7 * 24 * 3600_000;
+/** Queries kept on the device between visits: screens show them at once and refresh in the background. */
+const PERSISTED_QUERIES = new Set(['core', 'attendance', 'attendance-report', 'attendance-student', 'messages', 'ping']);
 
-/** Route-level code splitting: each screen downloads on first visit (the service worker precaches them all). */
+const routeLoaders: (() => Promise<unknown>)[] = [];
+
+/** Route-level code splitting; every screen is also preloaded once the app is idle (preloadRoutes). */
 function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  routeLoaders.push(load);
   return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+
+/** Loads every screen's code in the background so switching pages never waits for a download. */
+function preloadRoutes() {
+  const run = () => routeLoaders.forEach((load) => { load().catch(() => {}); });
+  if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
 }
 
 const SettingsPage = page(() => import('./pages/SettingsPage'), 'SettingsPage');
@@ -42,6 +55,10 @@ const StudentsPage = page(() => import('./pages/students/StudentsPage'), 'Studen
 
 function AppRoutes() {
   const { session } = useAuth();
+  useEffect(() => {
+    if (session) preloadRoutes();
+  }, [session]);
+  useWarmData(!!session);
   if (!session) return <LoginPage />;
 
   return (
@@ -92,7 +109,7 @@ function TenantApp({ tenant }: { tenant: TenantConfig }) {
         // A new API version may change row shapes, so drop caches from older builds.
         buster: `api-${tenant.expectedApiVersion}-${CACHE_SHAPE}`,
         dehydrateOptions: {
-          shouldDehydrateQuery: (q) => q.queryKey[0] === 'core' && q.state.status === 'success',
+          shouldDehydrateQuery: (q) => PERSISTED_QUERIES.has(String(q.queryKey[0])) && q.state.status === 'success',
         },
       }}
     >
@@ -113,16 +130,27 @@ type LoadState = { status: 'loading' } | { status: 'ready'; tenant: TenantConfig
 
 export function App() {
   const slug = useMemo(() => slugFromLocation(), []);
-  const [state, setState] = useState<LoadState>({ status: 'loading' });
+  const [state, setState] = useState<LoadState>(() => {
+    const cached = slug ? cachedTenant(slug) : null;
+    if (!cached) return { status: 'loading' };
+    applyTenantBranding(cached);
+    return { status: 'ready', tenant: cached };
+  });
 
   useEffect(() => {
     if (!slug) return;
     loadTenant(slug)
       .then((tenant) => {
-        applyTenantBranding(tenant);
-        setState({ status: 'ready', tenant });
+        setState((prev) => {
+          if (prev.status === 'ready' && JSON.stringify(prev.tenant) === JSON.stringify(tenant)) return prev;
+          applyTenantBranding(tenant);
+          return { status: 'ready', tenant };
+        });
       })
-      .catch((err: Error) => setState({ status: err.message === 'NOT_FOUND' ? 'missing' : 'error' }));
+      .catch((err: Error) => setState((prev) => {
+        if (prev.status === 'ready' && err.message !== 'NOT_FOUND') return prev;
+        return { status: err.message === 'NOT_FOUND' ? 'missing' : 'error' };
+      }));
   }, [slug]);
 
   if (!slug) return <TenantPickerPage />;

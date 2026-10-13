@@ -32,9 +32,11 @@ describe('applyDelta', () => {
   });
 
   it('keeps table identity when nothing changed, so React does not re-render', () => {
-    const next = applyDelta(initial, snapshot({}));
-    expect(next.tables).toBe(initial.tables);
-    expect(next.settings).toBe(initial.settings);
+    const next = applyDelta(initial, snapshot({}, 'T3'));
+    expect(next).toBe(initial);
+    expect(next.syncedAt).toBe('T3');
+    const { settings: _omitted, ...withoutSettings } = snapshot({}, 'T4');
+    expect(applyDelta(initial, withoutSettings as CoreSnapshot)).toBe(initial);
   });
 
   it('is idempotent when the same rows arrive twice (inclusive since)', () => {

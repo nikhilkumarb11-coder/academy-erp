@@ -201,7 +201,7 @@ export function FamilyFeesPage() {
         )}
       </section>
 
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 flex gap-2 border-t border-line bg-surface/95 p-3 backdrop-blur sm:hidden">
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 flex gap-2 border-t border-line bg-surface p-3 sm:hidden">
         <Button className="flex-1" onClick={() => setPaying(true)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
         {remind && <a href={remind.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'FeeReminder', parent_id: parentId, preview: remind.text }])} aria-label="Send reminder on WhatsApp" className="inline-flex min-h-11 items-center rounded-xl border border-line px-3 text-primary"><MessageCircle className="size-5" aria-hidden /></a>}
         <Button variant="secondary" aria-label={`Add a charge for ${labels.student.toLowerCase()}`} onClick={() => setCharging(children[0]?.id ?? '')}><Plus className="size-5" aria-hidden /></Button>

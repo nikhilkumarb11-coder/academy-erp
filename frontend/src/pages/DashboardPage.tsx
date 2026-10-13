@@ -6,7 +6,7 @@ import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext';
 import { InstallBanner } from '../components/InstallApp';
 import { Alert, Card, PageHeader, Spinner } from '../components/ui';
-import type { AttendanceMark } from '../data/types';
+import { attendanceMonthQuery } from '../data/attendance';
 import { useCoreData } from '../data/useCoreData';
 import { addDaysIso, formatDate, todayIso } from '../lib/dates';
 import { collected, dueNet, familySummaries, isOpenDue } from '../lib/ledger';
@@ -64,12 +64,7 @@ export function DashboardPage() {
   const month = today.slice(0, 7);
   const modules = tenant.modules;
 
-  const attendance = useQuery({
-    queryKey: ['attendance-report', tenant.slug, month, ''],
-    queryFn: () => api<{ rows: AttendanceMark[] }>('attendance.report', { month, course_id: '' }),
-    enabled: modules.attendance !== false,
-    staleTime: 60_000,
-  });
+  const attendance = useQuery({ ...attendanceMonthQuery(api, tenant.slug, month), enabled: modules.attendance !== false });
 
   const stats = useMemo(() => {
     if (!data) return null;

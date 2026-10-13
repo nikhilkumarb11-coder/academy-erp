@@ -18,19 +18,17 @@ function useOnline() {
   return online;
 }
 
-function timeOf(iso?: string) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function timeOf(ms: number) {
+  return ms ? new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 }
 
 export function SyncStatus({ compact }: { compact?: boolean }) {
-  const { data, isFetching, isError, refetch } = useCoreData();
+  const { dataUpdatedAt, isFetching, isError, refetch } = useCoreData();
   const online = useOnline();
 
   const state = !online || isError ? 'offline' : isFetching ? 'syncing' : 'synced';
   const text =
-    state === 'offline' ? 'Offline · saved data' : state === 'syncing' ? 'Syncing…' : `Synced ${timeOf(data?.syncedAt)}`;
+    state === 'offline' ? 'Offline · saved data' : state === 'syncing' ? 'Syncing…' : `Synced ${timeOf(dataUpdatedAt)}`;
   const Icon = state === 'offline' ? CloudOff : state === 'syncing' ? RefreshCw : CheckCircle2;
 
   return (

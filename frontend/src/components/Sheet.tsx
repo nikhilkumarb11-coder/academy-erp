@@ -55,7 +55,7 @@ export function Sheet({
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
-      <div className="absolute inset-0 bg-primary/40 backdrop-blur-[2px]" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-primary/50" onClick={onClose} aria-hidden />
       <div
         ref={panelRef}
         role="dialog"

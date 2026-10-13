@@ -37,10 +37,16 @@ export function mergeTables(current: CoreTables, changes: Changes): CoreTables {
 
 /** Applies a sync delta (rows changed since the last sync) to cached data. */
 export function applyDelta(current: CoreData, delta: CoreSnapshot): CoreData {
-  const settingsChanged = JSON.stringify(delta.settings ?? {}) !== JSON.stringify(current.settings);
+  const settingsChanged = !!delta.settings && JSON.stringify(delta.settings) !== JSON.stringify(current.settings);
+  const tables = mergeTables(current.tables, delta as unknown as Changes);
+  if (!settingsChanged && tables === current.tables) {
+    // Nothing changed: keep the same object so no screen re-renders. syncedAt is only read by the next sync.
+    current.syncedAt = delta.serverTime;
+    return current;
+  }
   return {
-    tables: mergeTables(current.tables, delta as unknown as Changes),
-    settings: settingsChanged ? delta.settings ?? current.settings : current.settings,
+    tables,
+    settings: settingsChanged ? delta.settings : current.settings,
     syncedAt: delta.serverTime,
   };
 }

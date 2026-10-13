@@ -342,7 +342,7 @@ export function AdmissionPage() {
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:static lg:mt-2 lg:rounded-2xl lg:border">
+      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface px-4 py-3 lg:static lg:mt-2 lg:rounded-2xl lg:border">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium">

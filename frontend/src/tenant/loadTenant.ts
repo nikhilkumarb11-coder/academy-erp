@@ -24,6 +24,8 @@ export function absoluteAssetUrl(path: string): string {
   return path ? new URL(assetUrl(path), window.location.origin).href : '';
 }
 
+const cacheKey = (slug: string) => `erp:${slug}:tenant`;
+
 export async function loadTenant(slug: string): Promise<TenantConfig> {
   const res = await fetch(`${BASE}tenants/${slug}.json`, { cache: 'no-cache' });
   if (!res.ok) throw new Error(res.status === 404 ? 'NOT_FOUND' : `HTTP_${res.status}`);
@@ -31,5 +33,20 @@ export async function loadTenant(slug: string): Promise<TenantConfig> {
   if (!contentType.includes('json')) throw new Error('NOT_FOUND');
   const config = (await res.json()) as TenantConfig;
   if (config.slug !== slug) throw new Error('NOT_FOUND');
+  try {
+    localStorage.setItem(cacheKey(slug), JSON.stringify(config));
+  } catch {
+    // storage full or blocked: the app still works, it just waits for the network next time
+  }
   return config;
+}
+
+/** The config from the last successful load on this device, so the app can open before the network answers. */
+export function cachedTenant(slug: string): TenantConfig | null {
+  try {
+    const config = JSON.parse(localStorage.getItem(cacheKey(slug)) ?? 'null') as TenantConfig | null;
+    return config?.slug === slug ? config : null;
+  } catch {
+    return null;
+  }
 }
