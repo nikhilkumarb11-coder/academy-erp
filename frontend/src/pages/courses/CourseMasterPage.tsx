@@ -207,7 +207,7 @@ function ChargesTab() {
   return (
     <>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted">Admission fee, uniforms, kits, exam or grading fees. They are billed in phase 3.</p>
+        <p className="text-sm text-muted">Admission fee, uniforms, kits, exam or grading fees. Add them at admission or from a family's fee page.</p>
         <Button onClick={() => setCharge('new')}><Plus className="size-4" aria-hidden /> Charge</Button>
       </div>
       <Card className="p-0 sm:p-0">

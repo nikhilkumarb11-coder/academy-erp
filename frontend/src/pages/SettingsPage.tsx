@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation } from 'react-router';
+import { TemplatesSettings } from './reminders/TemplatesSettings';
 import { useAuth } from '../auth/AuthContext';
 import { errorMessage } from '../api/errors';
 import { Alert, Button, Card, Field, PageHeader } from '../components/ui';
@@ -218,12 +220,18 @@ function StarterSetup() {
 }
 
 export function SettingsPage() {
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (hash) requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth' }));
+  }, [hash]);
+
   return (
     <>
-      <PageHeader title="Settings" subtitle="Academy profile, receipts and branding" />
+      <PageHeader title="Settings" subtitle="Academy profile, receipts, messages and branding" />
       <div className="space-y-5">
         <StarterSetup />
         <ProfileSettings />
+        <TemplatesSettings />
         <PasswordSettings />
         <DataSettings />
       </div>

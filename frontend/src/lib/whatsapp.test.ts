@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageTemplate } from '../data/types';
-import { amountText, fillMessage, templateText, whatsappUrl } from './whatsapp';
+import { amountText, fillMessage, placeholdersIn, templateText, whatsappUrl } from './whatsapp';
 
 const template = (type: string, text: string, active = true): MessageTemplate =>
   ({ id: type, type, name: type, text, active, created_at: '', updated_at: '' }) as unknown as MessageTemplate;
@@ -20,5 +20,11 @@ describe('whatsapp', () => {
     const text = 'Dear {parent}, ₹{amount} is due. Pay here: {payment_link}.\n\n{academy}';
     expect(fillMessage(text, { parent: 'Asha', amount: amountText(12500), academy: 'Rays' })).toBe('Dear Asha, ₹12,500 is due.\n\nRays');
     expect(fillMessage(text, { parent: 'Asha', amount: '500', academy: 'Rays', payment_link: 'https://x' })).toContain('Pay here: https://x');
+    const preset = 'Fee of ₹{balance} is pending. Pay securely here: {payment_link}\n\nThank you,\n{academy}';
+    expect(fillMessage(preset, { balance: '800', academy: 'Rays' })).toBe('Fee of ₹800 is pending.\n\nThank you,\nRays');
+  });
+
+  it('lists placeholders once, in order', () => {
+    expect(placeholdersIn('{event} on {date}. {details} {event}')).toEqual(['event', 'date', 'details']);
   });
 });

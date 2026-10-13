@@ -11,7 +11,8 @@ import { formatPhone } from '../../lib/phone';
 import { isDeleted, num } from '../../lib/values';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
 import { AddChargeSheet, AdjustDueSheet, CancelPaymentSheet, PaymentDoneSheet, RecordPaymentSheet } from './FeeSheets';
-import { paymentLines, reminderUrl, useMoney, useReceiptActions } from './feeShared';
+import { useLogMessages } from '../../data/useMessages';
+import { familyReminder, paymentLines, useMoney, useReceiptActions } from './feeShared';
 
 export function FamilyFeesPage() {
   const { parentId = '' } = useParams();
@@ -20,6 +21,7 @@ export function FamilyFeesPage() {
   const tenant = useTenant();
   const money = useMoney();
   const receipt = useReceiptActions();
+  const logMessages = useLogMessages();
   const { data, isPending } = useCoreData();
   const [paying, setPaying] = useState(params.get('pay') === '1');
   const [donePayment, setDonePayment] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function FamilyFeesPage() {
 
   const { t, parent, children, open, settled, payments, credit } = view;
   const outstanding = open.reduce((s, d) => s + num(d.balance), 0);
-  const remind = outstanding > 0 ? reminderUrl(t, data.settings, tenant.name, parentId) : null;
+  const remind = outstanding > 0 ? familyReminder(t, data.settings, tenant.name, parentId) : null;
   const closePay = () => {
     setPaying(false);
     if (params.has('pay')) setParams((p) => { p.delete('pay'); return p; }, { replace: true });
@@ -117,7 +119,7 @@ export function FamilyFeesPage() {
         </div>
         <div className="mt-4 hidden gap-2 sm:flex">
           <Button onClick={() => setPaying(true)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
-          {remind && <a href={remind} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium text-primary hover:bg-primary-soft"><MessageCircle className="size-4" aria-hidden /> Send reminder</a>}
+          {remind && <a href={remind.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'FeeReminder', parent_id: parentId, preview: remind.text }])} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium text-primary hover:bg-primary-soft"><MessageCircle className="size-4" aria-hidden /> Send reminder</a>}
           <Button variant="ghost" onClick={() => setCharging(children[0]?.id ?? '')}><Plus className="size-4" aria-hidden /> Add charge</Button>
         </div>
       </Card>
@@ -201,7 +203,7 @@ export function FamilyFeesPage() {
 
       <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 flex gap-2 border-t border-line bg-surface/95 p-3 backdrop-blur sm:hidden">
         <Button className="flex-1" onClick={() => setPaying(true)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
-        {remind && <a href={remind} target="_blank" rel="noreferrer" aria-label="Send reminder on WhatsApp" className="inline-flex min-h-11 items-center rounded-xl border border-line px-3 text-primary"><MessageCircle className="size-5" aria-hidden /></a>}
+        {remind && <a href={remind.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'FeeReminder', parent_id: parentId, preview: remind.text }])} aria-label="Send reminder on WhatsApp" className="inline-flex min-h-11 items-center rounded-xl border border-line px-3 text-primary"><MessageCircle className="size-5" aria-hidden /></a>}
         <Button variant="secondary" aria-label={`Add a charge for ${labels.student.toLowerCase()}`} onClick={() => setCharging(children[0]?.id ?? '')}><Plus className="size-5" aria-hidden /></Button>
       </div>
 

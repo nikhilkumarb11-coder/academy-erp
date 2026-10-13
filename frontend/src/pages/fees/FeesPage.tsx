@@ -9,7 +9,8 @@ import { AGE_BUCKETS, collected, familySummaries, type AgeBucket } from '../../l
 import { phoneDigits } from '../../lib/phone';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
 import { GenerateDuesSheet, PaymentDoneSheet, RecordPaymentSheet } from './FeeSheets';
-import { reminderUrl, useMoney } from './feeShared';
+import { useLogMessages } from '../../data/useMessages';
+import { familyReminder, useMoney } from './feeShared';
 
 type View = 'due' | 'overdue' | AgeBucket | 'credit';
 
@@ -18,6 +19,7 @@ export function FeesPage() {
   const tenant = useTenant();
   const money = useMoney();
   const { data, isPending } = useCoreData();
+  const logMessages = useLogMessages();
   const [params, setParams] = useSearchParams();
   const view = (params.get('view') ?? 'due') as View;
   const query = params.get('q') ?? '';
@@ -119,7 +121,7 @@ export function FeesPage() {
       ) : (
         <ul className="space-y-2">
           {rows.map((f) => {
-            const remind = f.outstanding > 0 ? reminderUrl(t, data.settings, tenant.name, f.parentId) : null;
+            const remind = f.outstanding > 0 ? familyReminder(t, data.settings, tenant.name, f.parentId) : null;
             return (
               <li key={f.parentId} className="rounded-2xl border border-line bg-surface p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -142,7 +144,8 @@ export function FeesPage() {
                   <div className="mt-3 flex gap-2">
                     <Button className="min-h-10 flex-1" onClick={() => setPaying(f.parentId)}><Wallet className="size-4" aria-hidden /> Collect</Button>
                     {remind && (
-                      <a href={remind} target="_blank" rel="noreferrer"
+                      <a href={remind.url} target="_blank" rel="noreferrer"
+                        onClick={() => logMessages([{ type: 'FeeReminder', parent_id: f.parentId, preview: remind.text }])}
                         className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-sm font-medium text-primary hover:bg-primary-soft">
                         <MessageCircle className="size-4" aria-hidden /> Remind
                       </a>

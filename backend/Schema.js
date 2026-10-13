@@ -42,7 +42,7 @@ const SCHEMA = {
   BalanceItems: ['id', 'type', 'name', 'amount', 'as_of_date', 'notes', ...ENTITY],
 
   MessageTemplates: ['id', 'type', 'name', 'text', 'active', ...ENTITY],
-  MessageLog: ['id', 'sent_at', 'type', 'parent_id', 'student_id', 'template_id', 'channel', 'preview'],
+  MessageLog: ['id', 'sent_at', 'type', 'parent_id', 'student_id', 'template_id', 'channel', 'preview', 'group_id'],
   WhatsAppGroups: ['id', 'name', 'notes', 'last_sent_at', ...ENTITY],
   Notifications: ['id', 'type', 'title', 'body', 'ref_entity', 'ref_id', 'read', 'created_at'],
 
@@ -58,7 +58,7 @@ const TEXT_COLUMN_PATTERN = /(^id$|_id$|_ids$|date|_at$|^timestamp$|phone|period
 const BOOTSTRAP_TABS = [
   'Categories', 'Courses', 'Batches', 'FeePlans', 'ChargeItems', 'CustomFields',
   'Parents', 'Students', 'Enrollments', 'MessageTemplates', 'ExpenseCategories',
-  'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays',
+  'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays', 'WhatsAppGroups',
 ];
 
 /** Default business settings; tenant presets may override, the owner edits them in the app. */
@@ -100,5 +100,7 @@ const STATUS = {
   paymentMode: ['Gateway', 'Cash', 'UPI', 'Bank'],
   manualPaymentMode: ['Cash', 'UPI', 'Bank'],
   enquiry: ['New', 'Follow-up', 'Trial', 'Converted', 'Lost'],
+  templateType: ['FeeReminder', 'Receipt', 'Absent', 'Event', 'NewCourse', 'Custom'],
+  messageChannel: ['WhatsApp', 'Copy'],
   feePlanFrequency: ['Monthly', 'Quarterly', 'HalfYearly', 'Annual'],
 };

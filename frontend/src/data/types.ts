@@ -104,11 +104,32 @@ export interface Enrollment extends Entity {
   status_reason: string;
 }
 
+export type TemplateType = 'FeeReminder' | 'Receipt' | 'Absent' | 'Event' | 'NewCourse' | 'Custom';
+
 export interface MessageTemplate extends Entity {
-  type: string;
+  type: TemplateType;
   name: string;
   text: string;
   active: SheetBool;
+}
+
+export interface WhatsAppGroup extends Entity {
+  name: string;
+  notes: string;
+  last_sent_at: string;
+}
+
+/** Not cached: read on demand through messages.recent. */
+export interface MessageLogRow {
+  id: string;
+  sent_at: string;
+  type: TemplateType;
+  parent_id: string;
+  student_id: string;
+  template_id: string;
+  group_id: string;
+  channel: 'WhatsApp' | 'Copy';
+  preview: string;
 }
 
 export interface ExpenseCategory extends Entity {
@@ -215,6 +236,7 @@ export interface CoreTables {
   PaymentAllocations: PaymentAllocation[];
   Receipts: Receipt[];
   Holidays: Holiday[];
+  WhatsAppGroups: WhatsAppGroup[];
 }
 
 export type CoreTabName = keyof CoreTables;
@@ -222,7 +244,7 @@ export type CoreTabName = keyof CoreTables;
 export const CORE_TABS: CoreTabName[] = [
   'Categories', 'Courses', 'Batches', 'FeePlans', 'ChargeItems', 'CustomFields',
   'Parents', 'Students', 'Enrollments', 'MessageTemplates', 'ExpenseCategories',
-  'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays',
+  'FeeDues', 'Payments', 'PaymentAllocations', 'Receipts', 'Holidays', 'WhatsAppGroups',
 ];
 
 /** Changes whenever the set of cached tabs changes, so caches from older builds are discarded. */

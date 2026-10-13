@@ -72,6 +72,9 @@ function routes() {
     'attendance.report': { handler: AttendanceApi.report },
     'holidays.save': { handler: AttendanceApi.saveHoliday },
     'holidays.delete': { handler: AttendanceApi.deleteHoliday },
+
+    'messages.log': { handler: MessagesApi.log },
+    'messages.recent': { handler: MessagesApi.recent },
   };
 }
 

@@ -19,6 +19,7 @@ import { FamilyFeesPage } from './pages/fees/FamilyFeesPage';
 import { FeesPage } from './pages/fees/FeesPage';
 import { PaymentsPage } from './pages/fees/PaymentsPage';
 import { ReceiptPage } from './pages/fees/ReceiptPage';
+import { RemindersPage } from './pages/reminders/RemindersPage';
 import { StudentProfilePage } from './pages/students/StudentProfilePage';
 import { StudentsPage } from './pages/students/StudentsPage';
 import { TenantPickerPage } from './pages/TenantPickerPage';
@@ -46,6 +47,7 @@ function AppRoutes() {
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="receipts/:paymentId" element={<ReceiptPage />} />
         <Route path="attendance" element={<AttendancePage />} />
+        <Route path="reminders" element={<RemindersPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="more" element={<MorePage />} />
         <Route path="*" element={<ComingSoonPage />} />

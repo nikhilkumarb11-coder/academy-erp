@@ -94,8 +94,20 @@ Dues, payments, allocations, receipts and holidays are cached on the device (boo
 | `payments.webhook` | forwardToken | Called only by the Worker. Confirms through the Razorpay API, then records the payment idempotently. |
 | `notifications.list` / `notifications.markRead` | ✓ | Polled every 30–60 seconds |
 
-### Communication, enquiries, expenses, finance (phases 4–5)
-`templates.save`, `messages.log`, `reminders.queue` (filters), `enquiries.save`, `enquiries.followups`, `enquiries.convert`, `expenses.save`, `expenseCategories.save`, `recurringExpenses.save`, `balanceItems.save`, `reports.dashboard`, `reports.pnl`, `reports.cashflow`, `reports.balanceSheet`, `export.csv`.
+### WhatsApp messages (phase 4)
+Messages leave the phone through wa.me links; the server only keeps templates, groups and a log.
+
+| Action | Auth | Notes |
+|---|---|---|
+| `catalog.save` / `catalog.delete` with `tab: "MessageTemplates"` | ✓ | type (FeeReminder, Receipt, Absent, Event, NewCourse, Custom), name, text, active |
+| `catalog.save` / `catalog.delete` with `tab: "WhatsAppGroups"` | ✓ | name, notes. `WhatsAppGroups` is cached on devices. |
+| `messages.log` | ✓ | entries[{type, channel?, parent_id?, student_id?, template_id?, group_id?, preview}] (max 50) → `{ logged, changes: { WhatsAppGroups } }`. Stamps the group's last_sent_at. |
+| `messages.recent` | ✓ | days? (default 60) → `{ rows }` newest first. The log is not cached on devices. |
+
+The reminder queue is built on the device from cached dues; it skips families reminded in the last 3 days using `messages.recent`.
+
+### Enquiries, expenses, finance (phase 5)
+`enquiries.save`, `enquiries.followups`, `enquiries.convert`, `expenses.save`, `expenseCategories.save`, `recurringExpenses.save`, `balanceItems.save`, `reports.dashboard`, `reports.pnl`, `reports.cashflow`, `reports.balanceSheet`, `export.csv`.
 
 ## Time-driven triggers
 

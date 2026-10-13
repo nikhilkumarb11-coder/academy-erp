@@ -11,6 +11,7 @@ import { useToast } from '../../components/Toast';
 import { Alert, Button, Card, EmptyState, Field, PageHeader, SelectField, Spinner } from '../../components/ui';
 import type { AttendanceMark, AttendanceStatus, CoreTables, Holiday } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
+import { useLogMessages } from '../../data/useMessages';
 import { useWrite } from '../../data/useWrite';
 import { addDaysIso, addMonths, formatDate, monthLabel, todayIso, weekdayShort } from '../../lib/dates';
 import { bool, isDeleted } from '../../lib/values';
@@ -74,6 +75,7 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
   const { api } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const logMessages = useLogMessages();
   const [params, setParams] = useSearchParams();
   const today = todayIso();
   const saved = localStorage.getItem(`${LAST_COURSE}:${tenant.slug}`) ?? '';
@@ -147,17 +149,18 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
     }
   }
 
-  const absentUrl = (studentId: string) => {
+  const absentMessage = (studentId: string) => {
     const student = t.Students.find((s) => s.id === studentId);
     const parent = t.Parents.find((p) => p.id === student?.parent_id);
     if (!student || !parent) return null;
-    return whatsappUrl(parent.phone, fillMessage(templateText(t.MessageTemplates, 'Absent'), {
+    const text = fillMessage(templateText(t.MessageTemplates, 'Absent'), {
       parent: parent.guardian_name,
       student: student.name,
       course: course?.name ?? '',
       date: formatDate(date),
       academy: settings.academy_name || tenant.name,
-    }));
+    });
+    return { url: whatsappUrl(parent.phone, text), text, parentId: parent.id };
   };
 
   return (
@@ -256,11 +259,11 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
           <p className="mb-3 text-sm text-muted">Send a WhatsApp message to the parents of absent {labels.students.toLowerCase()}.</p>
           <ul className="divide-y divide-line rounded-xl border border-line">
             {absentees.map((id) => {
-              const url = absentUrl(id);
+              const msg = absentMessage(id);
               return (
                 <li key={id} className="flex items-center justify-between gap-3 px-3 py-2">
                   <span className="font-medium">{t.Students.find((s) => s.id === id)?.name}</span>
-                  {url && <a href={url} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-primary"><MessageCircle className="size-4" aria-hidden /> WhatsApp</a>}
+                  {msg && <a href={msg.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'Absent', parent_id: msg.parentId, student_id: id, preview: msg.text }])} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-primary"><MessageCircle className="size-4" aria-hidden /> WhatsApp</a>}
                 </li>
               );
             })}

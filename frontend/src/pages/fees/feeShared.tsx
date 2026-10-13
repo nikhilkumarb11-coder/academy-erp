@@ -6,8 +6,9 @@ import { useToast } from '../../components/Toast';
 import type { CoreData, CoreTables, Payment } from '../../data/types';
 import { applyChanges, type Changes } from '../../data/merge';
 import { coreKey, useCoreData } from '../../data/useCoreData';
+import { useLogMessages } from '../../data/useMessages';
 import { formatMoney } from '../../lib/fees';
-import { dueTitle, isOpenDue } from '../../lib/ledger';
+import { byDueOrder, dueTitle, isOpenDue } from '../../lib/ledger';
 import { tenantBasePath } from '../../tenant/loadTenant';
 import { useTenant } from '../../tenant/TenantContext';
 import { amountText, fillMessage, templateText, whatsappUrl } from '../../lib/whatsapp';
@@ -52,6 +53,7 @@ export function useReceiptActions() {
   const queryClient = useQueryClient();
   const toast = useToast();
   const navigate = useNavigate();
+  const logMessages = useLogMessages();
   const isDemo = tenant.apiUrl === 'mock';
 
   async function fetchReceipt(paymentId: string, withFile = false) {
@@ -88,7 +90,9 @@ export function useReceiptActions() {
     try {
       const res = await fetchReceipt(payment.id);
       const phone = data?.tables.Parents.find((p) => p.id === payment.parent_id)?.phone ?? '';
-      const url = whatsappUrl(phone, message(payment, link(payment.id, res.url)));
+      const text = message(payment, link(payment.id, res.url));
+      const url = whatsappUrl(phone, text);
+      logMessages([{ type: 'Receipt', parent_id: payment.parent_id, preview: text }]);
       if (tab) tab.location.href = url;
       else window.location.href = url;
     } catch (err) {
@@ -134,17 +138,24 @@ export function useReceiptActions() {
   return { share, sendWhatsApp, open };
 }
 
-/** WhatsApp fee reminder for a family's open dues. */
-export function reminderUrl(t: CoreTables, settings: Record<string, string>, academy: string, parentId: string): string | null {
+export interface FamilyReminder {
+  parentId: string;
+  phone: string;
+  text: string;
+  url: string;
+}
+
+/** WhatsApp fee reminder for a family's open dues; `template` defaults to the active FeeReminder template. */
+export function familyReminder(t: CoreTables, settings: Record<string, string>, academy: string, parentId: string, template?: string): FamilyReminder | null {
   const parent = t.Parents.find((p) => p.id === parentId);
   if (!parent) return null;
-  const open = t.FeeDues.filter((d) => d.parent_id === parentId && isOpenDue(d));
+  const open = t.FeeDues.filter((d) => d.parent_id === parentId && isOpenDue(d)).sort(byDueOrder);
   if (!open.length) return null;
   const titles = open.map((d) => dueTitle(t, d));
   const students = [...new Set(open.map((d) => t.Students.find((s) => s.id === d.student_id)?.name).filter(Boolean))];
   const months = [...new Set(titles.map((x) => x.period).filter(Boolean))];
   const balance = open.reduce((s, d) => s + num(d.balance), 0);
-  return whatsappUrl(parent.phone, fillMessage(templateText(t.MessageTemplates, 'FeeReminder'), {
+  const text = fillMessage(template ?? templateText(t.MessageTemplates, 'FeeReminder'), {
     parent: parent.guardian_name,
     student: students.join(', '),
     course: [...new Set(titles.map((x) => x.title))].join(', '),
@@ -152,5 +163,7 @@ export function reminderUrl(t: CoreTables, settings: Record<string, string>, aca
     amount: amountText(balance),
     balance: amountText(balance),
     academy: settings.academy_name || academy,
-  }));
+    academy_phone: settings.academy_phone ?? '',
+  });
+  return { parentId, phone: parent.phone, text, url: whatsappUrl(parent.phone, text) };
 }

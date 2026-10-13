@@ -123,6 +123,42 @@ const CatalogApi = (() => {
         return ''; // phase 3: refuse while unpaid dues reference the item
       },
     },
+
+    MessageTemplates: {
+      prefix: 'TPL',
+      label: 'Template',
+      normalize(row) {
+        return {
+          type: Validate.oneOf(row.type, 'type', STATUS.templateType, { label: 'Type' }),
+          name: Validate.text(row.name, 'name', { required: true, max: 60, label: 'Name' }),
+          text: Validate.text(row.text, 'text', { required: true, max: 1000, label: 'Message' }),
+          active: Validate.bool(row.active),
+        };
+      },
+      check(row) {
+        Validate.unique('MessageTemplates', 'name', row.name, { selfId: row.id, label: 'Template' });
+      },
+      inUse() {
+        return '';
+      },
+    },
+
+    WhatsAppGroups: {
+      prefix: 'WAG',
+      label: 'Group',
+      normalize(row) {
+        return {
+          name: Validate.text(row.name, 'name', { required: true, max: 80, label: 'Name' }),
+          notes: Validate.text(row.notes, 'notes', { max: 200, label: 'Notes' }),
+        };
+      },
+      check(row) {
+        Validate.unique('WhatsAppGroups', 'name', row.name, { selfId: row.id, label: 'Group' });
+      },
+      inUse() {
+        return '';
+      },
+    },
   };
 
   function defFor(tab) {
