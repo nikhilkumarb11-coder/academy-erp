@@ -31,10 +31,38 @@ function installTriggers() {
     { handler: 'generateMonthlyDues', build: (t) => t.timeBased().onMonthDay(1).atHour(6) },
     { handler: 'createRecurringExpenses', build: (t) => t.timeBased().everyDays(1).atHour(7) },
     { handler: 'dailyBackup', build: (t) => t.timeBased().everyDays(1).atHour(2) },
+    { handler: 'onSheetEdit', build: (t) => t.forSpreadsheet(Util.prop('SPREADSHEET_ID', true)).onEdit() },
     // { handler: 'reconcilePaymentLinks', build: (t) => t.timeBased().everyMinutes(15) },       // phase 4
   ];
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
   wanted.forEach((w) => w.build(ScriptApp.newTrigger(w.handler)).create());
+}
+
+/**
+ * Edits typed directly into the spreadsheet: stamps updated_at on the edited rows (those with an id)
+ * and marks the tab changed, so every device picks the edit up on its next sync.
+ */
+function onSheetEdit(e) {
+  if (!e || !e.range) return;
+  const sheet = e.range.getSheet();
+  const tab = sheet.getName();
+  if (tab !== 'Settings' && BOOTSTRAP_TABS.indexOf(tab) < 0) return;
+  const now = Util.nowIso();
+  if (tab !== 'Settings') {
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const updatedCol = headers.indexOf('updated_at') + 1;
+    const idCol = headers.indexOf('id') + 1;
+    const first = Math.max(2, e.range.getRow());
+    const last = e.range.getLastRow();
+    const onlyUpdatedAt = e.range.getColumn() === updatedCol && e.range.getNumColumns() === 1;
+    if (updatedCol && idCol && last >= first && !onlyUpdatedAt) {
+      const ids = sheet.getRange(first, idCol, last - first + 1, 1).getValues();
+      const target = sheet.getRange(first, updatedCol, last - first + 1, 1);
+      const current = target.getValues();
+      target.setValues(ids.map((r, i) => [r[0] ? now : current[i][0]]));
+    }
+  }
+  Util.setProp(`stamp:${tab}`, now);
 }
 
 /** Emergency reset from the editor: set INITIAL_PASSWORD, run this, and every device is logged out. */

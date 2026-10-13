@@ -50,8 +50,10 @@ for (const f of tenants) {
     name: t.name,
     short_name: t.shortName || t.name,
     description: t.tagline || `${t.name} management app`,
+    id: `../${t.slug}/`,
     start_url: `../${t.slug}/`,
-    scope: `../${t.slug}/`,
+    // No trailing slash: the dashboard's URL is /<slug>, and anything outside the scope shows the browser bar.
+    scope: `../${t.slug}`,
     display: 'standalone',
     orientation: 'portrait',
     background_color: t.theme?.background || '#FAF7F0',

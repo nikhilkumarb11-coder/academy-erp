@@ -316,6 +316,8 @@ export interface CoreData {
   settings: Settings;
   /** Server clock of the last successful bootstrap/sync; next sync asks for changes after it. */
   syncedAt: string;
+  /** Device clock (ms) of the last full load; the cache is reloaded in full now and then (useCoreData). */
+  loadedAt?: number;
 }
 
 export interface PingResult {

@@ -6,6 +6,7 @@ import { applyDelta, fromSnapshot } from './merge';
 import { CORE_TABS, type CoreData, type CoreSnapshot } from './types';
 
 export const coreKey = (slug: string) => ['core', slug] as const;
+const FULL_RELOAD_MS = 6 * 3600_000;
 
 /**
  * Core data (students, parents, courses, ...) cached on the device.
@@ -25,7 +26,9 @@ export function useCoreData() {
     queryFn: async (): Promise<CoreData> => {
       const cached = queryClient.getQueryData<CoreData>(key);
       // A cache from an older build may lack newer tabs; a delta would only bring their recent rows.
-      if (cached?.syncedAt && CORE_TABS.every((t) => Array.isArray(cached.tables[t]))) {
+      // An old cache is reloaded in full as a safety net for edits a delta cannot see.
+      const fresh = !!cached?.loadedAt && Date.now() - cached.loadedAt < FULL_RELOAD_MS;
+      if (cached?.syncedAt && fresh && CORE_TABS.every((t) => Array.isArray(cached.tables[t]))) {
         const delta = await api<CoreSnapshot>('system.sync', { since: cached.syncedAt });
         return applyDelta(cached, delta);
       }

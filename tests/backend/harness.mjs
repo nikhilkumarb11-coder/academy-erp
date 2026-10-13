@@ -22,7 +22,7 @@ const BACKEND_FILES = [
   'Main.js', 'Setup.js',
 ];
 const SOURCE = BACKEND_FILES.map((f) => `// ---- ${f}\n${readFileSync(join(repo, 'backend', f), 'utf8')}`).join('\n');
-const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db, dailyBackup })';
+const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db, dailyBackup, onSheetEdit })';
 
 export function loadPreset(id) {
   return JSON.parse(readFileSync(join(repo, 'presets', `${id}.json`), 'utf8'));
@@ -80,6 +80,11 @@ class FakeRange {
   constructor(sheet, row, col, numRows, numCols) {
     Object.assign(this, { sheet, row, col, numRows, numCols });
   }
+  getSheet() { return this.sheet; }
+  getRow() { return this.row; }
+  getLastRow() { return this.row + this.numRows - 1; }
+  getColumn() { return this.col; }
+  getNumColumns() { return this.numCols; }
   getValues() {
     this.sheet.reads += 1;
     const out = [];

@@ -9,7 +9,7 @@ export function fromSnapshot(snapshot: CoreSnapshot): CoreData {
   CORE_TABS.forEach((tab) => {
     (tables as unknown as Record<string, unknown[]>)[tab] = (snapshot[tab] ?? []).filter((r) => !isDeleted(r));
   });
-  return { tables, settings: snapshot.settings ?? {}, syncedAt: snapshot.serverTime };
+  return { tables, settings: snapshot.settings ?? {}, syncedAt: snapshot.serverTime, loadedAt: Date.now() };
 }
 
 /**
@@ -48,6 +48,7 @@ export function applyDelta(current: CoreData, delta: CoreSnapshot): CoreData {
     tables,
     settings: settingsChanged ? delta.settings : current.settings,
     syncedAt: delta.serverTime,
+    loadedAt: current.loadedAt,
   };
 }
 

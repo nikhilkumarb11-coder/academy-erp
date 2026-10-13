@@ -154,6 +154,28 @@ describe('sync', () => {
     assert.equal(readsOf(be, ['Courses']), coursesRead, 'courses were only read by the admission, not by sync');
   });
 
+  it('picks up edits typed directly into the spreadsheet', async () => {
+    const { be, token } = await seeded();
+    const boot = await be.ok('system.bootstrap', {}, token);
+    const plan = boot.FeePlans.find((p) => p.frequency === 'Monthly');
+    await be.ok('admissions.create', {
+      parent: { guardian_name: 'Asha', phone: '9000000009' },
+      students: [{ name: 'rr', class: 'hgh', enrollments: [{ course_id: boot.Courses[0].id, fee_plan_id: plan.id }] }],
+    }, token);
+    be.state.today = '2026-10-14';
+    const fresh = await be.login();
+    const synced = await be.ok('system.sync', { since: boot.serverTime }, fresh);
+
+    const sheet = be.state.spreadsheet.getSheetByName('Students');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const nameCell = sheet.getRange(2, headers.indexOf('name') + 1);
+    nameCell.setValues([['Pranik']]);
+    be.execution().onSheetEdit({ range: nameCell });
+
+    const delta = await be.ok('system.sync', { since: synced.serverTime }, fresh);
+    assert.deepEqual(delta.Students.map((s) => s.name), ['Pranik']);
+  });
+
   it('appends audit entries without reading the log', async () => {
     const { be, token } = await seeded();
     const before = readsOf(be, ['AuditLog']);

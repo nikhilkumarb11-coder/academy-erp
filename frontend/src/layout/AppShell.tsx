@@ -9,6 +9,7 @@ import { useTenant } from '../tenant/TenantContext';
 import { useBrandingSync } from '../tenant/useBrandingSync';
 import { GlobalSearch } from './GlobalSearch';
 import { SyncStatus } from './SyncStatus';
+import { useAppLaunch } from './useAppLaunch';
 import { VersionBanner } from './VersionBanner';
 import { visibleNav } from './nav';
 
@@ -108,6 +109,7 @@ function BottomTabs() {
 
 export function AppShell() {
   useBrandingSync();
+  useAppLaunch();
   return (
     <div className="flex min-h-dvh">
       <Sidebar />
