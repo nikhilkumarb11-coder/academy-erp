@@ -9,7 +9,7 @@ import { Alert, Button, Card, Field, PageHeader, Toggle } from '../../components
 import type { Changes } from '../../data/merge';
 import { useWrite } from '../../data/useWrite';
 import { mapImport, IMPORT_TEMPLATE, parseCsv, type ImportRow, type MappedImport } from '../../lib/csv';
-import { todayIso } from '../../lib/dates';
+import { formatDate, todayIso } from '../../lib/dates';
 import { downloadCsv } from '../../lib/finance';
 import { useMoney } from '../fees/feeShared';
 
@@ -109,7 +109,8 @@ export function ImportPage() {
               <li>Download the template and fill one row per student. Brothers and sisters share the guardian's phone number.</li>
               <li>List courses by their names in this app, separated by semicolons, e.g. <em>Karate; Abacus</em>.</li>
               <li>Put each student's unpaid fees as of today in <em>opening_due</em>. They are added as an "Opening balance" charge.</li>
-              <li>Dates can be 2015-03-12 or 12/03/2015. Save as CSV and choose the file below. Nothing is saved until you confirm.</li>
+              <li>Phone numbers are 10-digit mobile numbers. Type dates with the month as a word, e.g. <em>12-Mar-2015</em>, so Excel cannot swap day and month.</li>
+              <li>Save as CSV and choose the file below. Check the dates in the preview; nothing is saved until you confirm.</li>
             </ol>
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => downloadCsv('students-import-template.csv', IMPORT_TEMPLATE)}>
@@ -176,6 +177,7 @@ export function ImportPage() {
                         <th className="px-4 py-2 font-medium">Row</th>
                         <th className="px-2 py-2 font-medium">Student</th>
                         <th className="px-2 py-2 font-medium">Guardian</th>
+                        <th className="px-2 py-2 font-medium">Joined</th>
                         <th className="px-2 py-2 font-medium">Courses</th>
                         <th className="px-2 py-2 text-right font-medium">Opening due</th>
                         <th className="px-4 py-2 font-medium">Result</th>
@@ -187,8 +189,12 @@ export function ImportPage() {
                         return (
                           <tr key={r.row} className={clsx(r.status === 'error' && 'bg-danger/5')}>
                             <td className="px-4 py-2 tabular-nums text-muted">{r.row + 1}</td>
-                            <td className="px-2 py-2 font-medium">{row.student_name}</td>
+                            <td className="px-2 py-2 font-medium">
+                              {row.student_name}
+                              {row.dob && <span className="block text-xs font-normal text-muted">Born {formatDate(row.dob)}</span>}
+                            </td>
                             <td className="px-2 py-2">{row.guardian_name}<span className="block text-xs text-muted">{row.phone}</span></td>
+                            <td className="whitespace-nowrap px-2 py-2">{row.join_date ? formatDate(row.join_date) : 'Today'}</td>
                             <td className="px-2 py-2">{row.courses}</td>
                             <td className="px-2 py-2 text-right tabular-nums">{row.opening_due ? money(Number(row.opening_due) || 0) : ''}</td>
                             <td className="px-4 py-2">

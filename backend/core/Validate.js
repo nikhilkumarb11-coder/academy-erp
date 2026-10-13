@@ -52,23 +52,30 @@ const Validate = (() => {
    * E.164 without spaces, e.g. +919876543210. Mirrors frontend/src/lib/phone.ts.
    * Returns '' for blank input when not required.
    */
+  /** Digits after the country code where the length is fixed (India: 10-digit mobile numbers). */
+  const LOCAL_LENGTH = { 91: 10 };
+
   function phone(value, field, { required = false, countryCode = '91', label = field } = {}) {
     const raw = value === undefined || value === null ? '' : String(value).trim();
-    let digits = raw.replace(/\D/g, '');
+    const digits = raw.replace(/\D/g, '');
     if (!digits) {
       if (required) fail(field, `${label} is required`);
       return '';
     }
+    const cc = String(countryCode);
+    const len = LOCAL_LENGTH[cc];
+    const localOk = (local) => (len ? local.length === len : local.length >= 6 && local.length <= 12);
     let out = '';
-    if (raw.startsWith('+')) out = digits.length >= 8 ? `+${digits}` : '';
-    else if (digits.startsWith('00')) out = digits.length >= 10 ? `+${digits.slice(2)}` : '';
-    else {
-      digits = digits.replace(/^0+/, '');
-      if (digits.length === 10) out = `+${countryCode}${digits}`;
-      else if (digits.startsWith(countryCode) && digits.length === countryCode.length + 10) out = `+${digits}`;
-      else if (digits.length >= 8) out = `+${countryCode}${digits}`;
+    if (raw.startsWith('+') || digits.startsWith('00')) {
+      const intl = raw.startsWith('+') ? digits : digits.slice(2);
+      if (intl.startsWith(cc)) out = localOk(intl.slice(cc.length)) ? `+${intl}` : '';
+      else out = intl.length >= 8 && intl.length <= 15 ? `+${intl}` : '';
+    } else {
+      const local = digits.replace(/^0+/, '');
+      if (localOk(local)) out = `+${cc}${local}`;
+      else if (local.startsWith(cc) && localOk(local.slice(cc.length))) out = `+${local}`;
     }
-    if (!out) fail(field, `${label} is not a valid phone number`);
+    if (!out) fail(field, len ? `${label} must be a ${len}-digit mobile number` : `${label} is not a valid phone number`);
     return out;
   }
 

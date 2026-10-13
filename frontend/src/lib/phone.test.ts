@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPhone, normalizePhone } from './phone';
+import { formatPhone, normalizePhone, phoneProblem } from './phone';
 
 describe('normalizePhone', () => {
   it.each([
@@ -14,9 +14,19 @@ describe('normalizePhone', () => {
     expect(normalizePhone(input)).toBe(expected);
   });
 
-  it('rejects inputs that are too short', () => {
+  it('rejects Indian numbers that are not exactly 10 digits', () => {
     expect(normalizePhone('12345')).toBe('');
     expect(normalizePhone('')).toBe('');
+    expect(normalizePhone('987654321')).toBe('');
+    expect(normalizePhone('98765432101')).toBe('');
+    expect(normalizePhone('8888888888888888')).toBe('');
+    expect(normalizePhone('+91 98765 432101')).toBe('');
+  });
+
+  it('explains the problem once enough digits are typed', () => {
+    expect(phoneProblem('98765')).toBeUndefined();
+    expect(phoneProblem('9876543210')).toBeUndefined();
+    expect(phoneProblem('98765432101')).toBe('Enter a 10-digit mobile number');
   });
 
   it('uses the tenant country code', () => {

@@ -11,7 +11,8 @@ import { useCoreTables } from '../../data/useCoreData';
 import { useWrite } from '../../data/useWrite';
 import { addDaysIso, todayIso } from '../../lib/dates';
 import { bool, isDeleted } from '../../lib/values';
-import { useLabels } from '../../tenant/TenantContext';
+import { phoneProblem } from '../../lib/phone';
+import { useLabels, useTenant } from '../../tenant/TenantContext';
 import { bySortOrder } from '../courses/catalogHooks';
 
 const INLINE = ['name', 'phone', 'source', 'enquiry_date', 'next_followup_date', 'trial_date', 'status', 'lost_reason', 'notes'];
@@ -21,6 +22,7 @@ const FOLLOW_UP_IN = [1, 3, 7];
 export function EnquirySheet({ enquiry, onClose }: { enquiry: Enquiry | null; onClose: () => void }) {
   const t = useCoreTables();
   const labels = useLabels();
+  const { locale } = useTenant();
   const toast = useToast();
   const save = useWrite('enquiries.save');
   const remove = useWrite('enquiries.delete');
@@ -74,7 +76,7 @@ export function EnquirySheet({ enquiry, onClose }: { enquiry: Enquiry | null; on
     >
       <form id="enquiry-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         <Field label={`${labels.student} name`} value={v.name} onChange={(e) => set('name', e.target.value)} autoComplete="off" error={fieldError(err, 'name')} />
-        <Field label="Phone" type="tel" inputMode="tel" placeholder="98765 43210" value={v.phone} onChange={(e) => set('phone', e.target.value)} autoComplete="off" error={fieldError(err, 'phone')} />
+        <Field label="Phone" type="tel" inputMode="tel" placeholder="98765 43210" maxLength={16} value={v.phone} onChange={(e) => set('phone', e.target.value)} autoComplete="off" error={phoneProblem(v.phone, locale.countryCode) ?? fieldError(err, 'phone')} />
 
         {courses.length > 0 && (
           <div className="sm:col-span-2">

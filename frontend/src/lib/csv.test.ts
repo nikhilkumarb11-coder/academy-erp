@@ -33,9 +33,17 @@ describe('mapImport', () => {
     expect(mapImport([['Name', 'Phone']]).missing).toEqual(['guardian_name']);
   });
 
-  it('normalizes day-first and ISO-like dates only', () => {
+  it('reads the date shapes Excel saves, day first', () => {
     expect(normalizeDate('12-03-2015')).toBe('2015-03-12');
     expect(normalizeDate('2015/3/12')).toBe('2015-03-12');
+    expect(normalizeDate('03-12-15')).toBe('2015-12-03');
+    expect(normalizeDate('05-06-25')).toBe('2025-06-05');
+    expect(normalizeDate('11-02-98')).toBe('1998-02-11');
+    expect(normalizeDate('6/25/2025')).toBe('2025-06-25');
+    expect(normalizeDate('12-Mar-15')).toBe('2015-03-12');
+    expect(normalizeDate('2 November 2018')).toBe('2018-11-02');
+    expect(normalizeDate('Mar 12, 2015')).toBe('2015-03-12');
+    expect(normalizeDate('31-02-2015')).toBe('31-02-2015');
     expect(normalizeDate('March 2015')).toBe('March 2015');
   });
 });

@@ -70,7 +70,7 @@ describe('import', () => {
     { guardian_name: 'Ravi Kumar', phone: '98765 43210', student_name: 'Aarav', class: '5', join_date: '2025-06-10', courses: 'karate; Abacus', opening_due: '1500' },
     { guardian_name: 'Ravi K', phone: '+91 9876543210', student_name: 'Diya', courses: 'Drawing', fee_plan: 'Annual (10 months)' },
     { guardian_name: 'Ravi Kumar', phone: '9876543210', student_name: 'aarav' },
-    { guardian_name: 'Meena', phone: '12', student_name: 'Kiran' },
+    { guardian_name: 'Meena', phone: '8888888888888888', student_name: 'Kiran' },
     { guardian_name: 'Meena', phone: '9000000001', student_name: 'Kiran', courses: 'Swimming' },
     { guardian_name: 'Sita', phone: '9000000002', student_name: 'Lakshmi', dob: '12/03/2015' },
   ];
@@ -80,7 +80,7 @@ describe('import', () => {
     const res = await be.ok('import.students', { rows }, token);
     assert.deepEqual(res.results.map((r) => r.status), ['new_family', 'new_family', 'duplicate', 'error', 'error', 'error']);
     assert.match(res.results[1].message, /Same phone as Ravi Kumar/);
-    assert.match(res.results[3].message, /Phone is not a valid/);
+    assert.match(res.results[3].message, /Phone must be a 10-digit mobile number/);
     assert.match(res.results[4].message, /Course "Swimming" not found/);
     assert.match(res.results[5].message, /Date of birth must be a date/);
     assert.deepEqual(res.summary, { families: 1, existingFamilies: 0, students: 2, enrollments: 3, openingDues: 1500, duplicates: 1, errors: 3 });

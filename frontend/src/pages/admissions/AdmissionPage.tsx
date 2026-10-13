@@ -11,7 +11,7 @@ import type { ChargeItem, Course, Parent } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
 import { useWrite, type WriteResult } from '../../data/useWrite';
 import { formatMoney, monthlyFeeFor, planAmount } from '../../lib/fees';
-import { formatPhone, normalizePhone } from '../../lib/phone';
+import { formatPhone, normalizePhone, phoneProblem } from '../../lib/phone';
 import { bool, isDeleted, num } from '../../lib/values';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
 import { bySortOrder } from '../courses/catalogHooks';
@@ -186,7 +186,8 @@ export function AdmissionPage() {
               placeholder="98765 43210"
               value={parent.phone}
               onChange={(e) => setParent((p) => ({ ...p, phone: e.target.value }))}
-              error={fieldError(err, 'parent.phone')}
+              maxLength={16}
+              error={phoneProblem(parent.phone, locale.countryCode) ?? fieldError(err, 'parent.phone')}
               hint={normalized && !showMatch ? `Saved as ${formatPhone(normalized, locale.countryCode)}` : undefined}
             />
             <Field label={`${labels.guardian} name`} autoComplete="off" value={parent.guardian_name} onChange={(e) => setParent((p) => ({ ...p, guardian_name: e.target.value }))} error={fieldError(err, 'parent.guardian_name')} />
@@ -213,7 +214,7 @@ export function AdmissionPage() {
             </button>
             {moreParent && (
               <>
-                <Field label="Alternate phone (optional)" type="tel" inputMode="tel" value={parent.alt_phone} onChange={(e) => setParent((p) => ({ ...p, alt_phone: e.target.value }))} error={fieldError(err, 'parent.alt_phone')} />
+                <Field label="Alternate phone (optional)" type="tel" inputMode="tel" value={parent.alt_phone} maxLength={16} onChange={(e) => setParent((p) => ({ ...p, alt_phone: e.target.value }))} error={phoneProblem(parent.alt_phone, locale.countryCode) ?? fieldError(err, 'parent.alt_phone')} />
                 <Field label="Email (optional)" type="email" value={parent.email} onChange={(e) => setParent((p) => ({ ...p, email: e.target.value }))} />
                 <TextAreaField label="Notes (optional)" rows={2} value={parent.notes} onChange={(e) => setParent((p) => ({ ...p, notes: e.target.value }))} className="sm:col-span-2" />
               </>

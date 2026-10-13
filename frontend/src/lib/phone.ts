@@ -4,16 +4,33 @@
  */
 export function normalizePhone(input: string, countryCode = '91'): string {
   const raw = (input || '').trim();
-  let digits = raw.replace(/\D/g, '');
+  const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
+  const len = LOCAL_LENGTH[countryCode];
+  const localOk = (local: string) => (len ? local.length === len : local.length >= 6 && local.length <= 12);
 
-  if (raw.startsWith('+')) return digits.length >= 8 ? `+${digits}` : '';
-  if (digits.startsWith('00')) return digits.length >= 10 ? `+${digits.slice(2)}` : '';
+  if (raw.startsWith('+') || digits.startsWith('00')) {
+    const intl = raw.startsWith('+') ? digits : digits.slice(2);
+    if (intl.startsWith(countryCode)) return localOk(intl.slice(countryCode.length)) ? `+${intl}` : '';
+    return intl.length >= 8 && intl.length <= 15 ? `+${intl}` : '';
+  }
 
-  digits = digits.replace(/^0+/, '');
-  if (digits.length === 10) return `+${countryCode}${digits}`;
-  if (digits.startsWith(countryCode) && digits.length === countryCode.length + 10) return `+${digits}`;
-  return digits.length >= 8 ? `+${countryCode}${digits}` : '';
+  const local = digits.replace(/^0+/, '');
+  if (localOk(local)) return `+${countryCode}${local}`;
+  if (local.startsWith(countryCode) && localOk(local.slice(countryCode.length))) return `+${local}`;
+  return '';
+}
+
+/** Digits after the country code, where the length is fixed (India: 10-digit mobile numbers). Mirrors backend Validate.phone. */
+export const LOCAL_LENGTH: Record<string, number> = { '91': 10 };
+
+/** Message for a phone being typed that can no longer become valid (too many digits), or is complete-length but wrong. */
+export function phoneProblem(input: string, countryCode = '91'): string | undefined {
+  const digits = phoneDigits(input);
+  const len = LOCAL_LENGTH[countryCode];
+  if (!len || !digits || normalizePhone(input, countryCode)) return undefined;
+  if (digits.replace(/^0+/, '').length >= len) return `Enter a ${len}-digit mobile number`;
+  return undefined;
 }
 
 /** Digits only, for wa.me links and search matching. */

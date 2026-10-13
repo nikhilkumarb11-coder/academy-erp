@@ -8,7 +8,7 @@ import { Alert, Button, Field, SelectField, TextAreaField } from '../../componen
 import type { Enrollment, Parent, Student, StudentStatus } from '../../data/types';
 import { useCoreTables } from '../../data/useCoreData';
 import { useWrite } from '../../data/useWrite';
-import { formatPhone } from '../../lib/phone';
+import { formatPhone, phoneProblem } from '../../lib/phone';
 import { bool, parseExtra } from '../../lib/values';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
 import { bySortOrder } from '../courses/catalogHooks';
@@ -91,8 +91,8 @@ export function EditParentSheet({ parent, onClose }: { parent: Parent; onClose: 
     <Sheet open title={`Edit ${labels.guardian.toLowerCase()}`} onClose={onClose} footer={<Footer formId="parent-form" saving={save.isPending} />}>
       <form id="parent-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
         <Field label="Name" value={v.guardian_name} onChange={(e) => setV({ ...v, guardian_name: e.target.value })} error={fe('guardian_name')} className="sm:col-span-2" />
-        <Field label="Phone" type="tel" inputMode="tel" value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} error={fe('phone')} hint="Changing it affects every child in this family" />
-        <Field label="Alternate phone (optional)" type="tel" inputMode="tel" value={v.alt_phone} onChange={(e) => setV({ ...v, alt_phone: e.target.value })} error={fe('alt_phone')} />
+        <Field label="Phone" type="tel" inputMode="tel" maxLength={16} value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} error={phoneProblem(v.phone, locale.countryCode) ?? fe('phone')} hint="Changing it affects every child in this family" />
+        <Field label="Alternate phone (optional)" type="tel" inputMode="tel" maxLength={16} value={v.alt_phone} onChange={(e) => setV({ ...v, alt_phone: e.target.value })} error={phoneProblem(v.alt_phone, locale.countryCode) ?? fe('alt_phone')} />
         <Field label="Email (optional)" type="email" value={v.email} onChange={(e) => setV({ ...v, email: e.target.value })} error={fe('email')} className="sm:col-span-2" />
         <TextAreaField label="Address (optional)" rows={2} value={v.address} onChange={(e) => setV({ ...v, address: e.target.value })} error={fe('address')} className="sm:col-span-2" />
         <TextAreaField label="Notes (optional)" rows={2} value={v.notes} onChange={(e) => setV({ ...v, notes: e.target.value })} error={fe('notes')} className="sm:col-span-2" />
