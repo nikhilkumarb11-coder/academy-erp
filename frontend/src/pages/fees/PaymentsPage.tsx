@@ -71,8 +71,8 @@ export function PaymentsPage() {
               <li key={p.id}>
                 <Link to={`/receipts/${p.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-primary-soft/60">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{parent?.guardian_name ?? '—'}</p>
-                    <p className="truncate text-xs text-muted">
+                    <p className="break-words font-medium">{parent?.guardian_name ?? '—'}</p>
+                    <p className="break-words text-xs text-muted">
                       {p.receipt_no} · {formatDate(p.paid_at)} · {p.mode}
                       {lines.length > 0 && ` · ${[...new Set(lines.map((l) => l.student))].join(', ')}`}
                     </p>

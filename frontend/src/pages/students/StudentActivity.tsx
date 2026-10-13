@@ -42,7 +42,7 @@ export function StudentActivity({ t, student }: { t: CoreTables; student: Studen
               const { title, period } = dueTitle(t, d);
               return (
                 <li key={d.id} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="min-w-0 truncate">{title}{period && <span className="text-muted"> · {period}</span>}</span>
+                  <span className="min-w-0 break-words">{title}{period && <span className="text-muted"> · {period}</span>}</span>
                   <span className="flex items-center gap-2">
                     <span className="tabular-nums">{money(num(d.balance))}</span>
                     {d.due_date < today && <StatusBadge status="Overdue" />}

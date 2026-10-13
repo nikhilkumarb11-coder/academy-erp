@@ -227,7 +227,7 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
               const current = markOf(student.id);
               return (
                 <li key={student.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <p className="min-w-0 flex-1 truncate font-medium">{student.name}</p>
+                  <p className="min-w-0 flex-1 break-words font-medium">{student.name}</p>
                   <div className="flex gap-1.5" role="group" aria-label={`Attendance for ${student.name}`}>
                     {STATES.map((s) => (
                       <button key={s.status} type="button" aria-pressed={current === s.status} aria-label={s.status}

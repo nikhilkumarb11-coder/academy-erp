@@ -20,12 +20,12 @@ const MIN_MARKS = 4;
 
 function Stat({ label, value, icon: Icon, tone }: { label: string; value: number | string; icon: typeof Users; tone?: 'good' | 'bad' }) {
   return (
-    <Card className="flex items-center gap-4">
-      <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-primary">
+    <Card className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-4">
+      <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-primary sm:size-11">
         <Icon className="size-5" aria-hidden />
       </div>
-      <div className="min-w-0">
-        <p className={clsx('truncate text-2xl font-semibold', tone === 'bad' ? 'text-danger' : tone === 'good' ? 'text-success' : 'text-primary')}>{value}</p>
+      <div className="min-w-0 max-w-full">
+        <p className={clsx('break-words text-xl font-semibold tabular-nums sm:text-2xl', tone === 'bad' ? 'text-danger' : tone === 'good' ? 'text-success' : 'text-primary')}>{value}</p>
         <p className="text-xs text-muted">{label}</p>
       </div>
     </Card>
@@ -252,7 +252,7 @@ export function DashboardPage() {
               {stats.recentPayments.map((p) => (
                 <li key={p.id}>
                   <Link to={`/receipts/${p.id}`} className="flex items-center justify-between gap-3 py-2 hover:text-primary">
-                    <span className="min-w-0"><span className="block truncate font-medium">{p.family}</span><span className="text-xs text-muted">{formatDate(p.paid_at)} · {p.mode}</span></span>
+                    <span className="min-w-0"><span className="block break-words font-medium">{p.family}</span><span className="text-xs text-muted">{formatDate(p.paid_at)} · {p.mode}</span></span>
                     <span className="font-medium tabular-nums">{money(num(p.amount))}</span>
                   </Link>
                 </li>
@@ -267,7 +267,7 @@ export function DashboardPage() {
               {stats.topDefaulters.map((f) => (
                 <li key={f.parentId}>
                   <Link to={`/fees/${f.parentId}`} className="flex items-center justify-between gap-3 py-2 hover:text-primary">
-                    <span className="min-w-0"><span className="block truncate font-medium">{f.guardian}</span><span className="text-xs text-muted">{f.children.join(', ')}{f.bucket && ` · ${f.bucket}`}</span></span>
+                    <span className="min-w-0"><span className="block break-words font-medium">{f.guardian}</span><span className="text-xs text-muted">{f.children.join(', ')}{f.bucket && ` · ${f.bucket}`}</span></span>
                     <span className="font-medium text-danger tabular-nums">{money(f.overdue)}</span>
                   </Link>
                 </li>
@@ -289,7 +289,7 @@ export function DashboardPage() {
           <ul className="space-y-2.5">
             {stats.byCourse.map((c) => (
               <li key={c.id} className="grid grid-cols-[minmax(0,9rem)_1fr_2rem] items-center gap-3 text-sm sm:grid-cols-[minmax(0,12rem)_1fr_2.5rem]">
-                <span className="truncate">{c.name}</span>
+                <span className="break-words">{c.name}</span>
                 <span className="h-2.5 overflow-hidden rounded-full bg-primary-soft">
                   <span className="block h-full rounded-full bg-accent" style={{ width: `${(c.count / stats.maxCourse) * 100}%` }} />
                 </span>

@@ -126,7 +126,7 @@ export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId
                   <li key={d.id} className="flex items-center gap-3 px-3 py-2">
                     {choose && <input type="checkbox" className="size-5 accent-[var(--tenant-primary)]" checked={picked[d.id] !== undefined} onChange={() => togglePick(d)} aria-label={`Pay ${title} ${period}`} />}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{student} · {title}</p>
+                      <p className="break-words font-medium">{student} · {title}</p>
                       <p className="text-xs text-muted">{[period, `due ${formatDate(d.due_date)}`].filter(Boolean).join(' · ')}</p>
                     </div>
                     {choose && picked[d.id] !== undefined ? (

@@ -128,8 +128,8 @@ export function FeesPage() {
               <li key={f.parentId} className="rounded-2xl border border-line bg-surface p-4">
                 <div className="flex items-start justify-between gap-3">
                   <Link to={`/fees/${f.parentId}`} className="min-w-0 flex-1">
-                    <p className="truncate font-medium hover:text-primary">{f.guardian}</p>
-                    <p className="truncate text-xs text-muted">{f.children.join(', ')}</p>
+                    <p className="break-words font-medium hover:text-primary">{f.guardian}</p>
+                    <p className="break-words text-xs text-muted">{f.children.join(', ')}</p>
                   </Link>
                   <div className="text-right">
                     {f.outstanding > 0 ? (
@@ -171,7 +171,7 @@ export function Stat({ label, value, tone }: { label: string; value: string; ton
   return (
     <Card className="p-3 sm:p-4">
       <p className="text-xs text-muted">{label}</p>
-      <p className={clsx('mt-1 truncate text-lg font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-danger', tone === 'success' && 'text-success')}>{value}</p>
+      <p className={clsx('mt-1 break-words text-lg font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-danger', tone === 'success' && 'text-success')}>{value}</p>
     </Card>
   );
 }

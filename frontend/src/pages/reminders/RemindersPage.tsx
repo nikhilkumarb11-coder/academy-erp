@@ -155,8 +155,8 @@ function FeeRemindersTab({ data }: { data: CoreData }) {
             return (
               <li key={f.parentId} className={clsx('flex items-center gap-3 px-4 py-3', skipRecent && isRecent(f.parentId) && 'opacity-50')}>
                 <Link to={`/fees/${f.parentId}`} className="min-w-0 flex-1">
-                  <p className="truncate font-medium hover:text-primary">{f.guardian}</p>
-                  <p className="truncate text-xs text-muted">
+                  <p className="break-words font-medium hover:text-primary">{f.guardian}</p>
+                  <p className="break-words text-xs text-muted">
                     {f.children.join(', ')}{last ? ` · reminded ${formatDate(new Date(last).toISOString().slice(0, 10))}` : ''}
                   </p>
                 </Link>
@@ -357,7 +357,7 @@ function SentTab({ data }: { data: CoreData }) {
           {rows.map((m) => (
             <li key={m.id} className="px-4 py-3">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="truncate font-medium">{recipient(m)}</p>
+                <p className="break-words font-medium">{recipient(m)}</p>
                 <p className="shrink-0 text-xs text-muted">
                   {new Date(m.sent_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
                 </p>

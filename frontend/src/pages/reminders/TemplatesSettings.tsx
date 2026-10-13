@@ -47,7 +47,7 @@ export function TemplatesSettings() {
         {templates.map((tpl) => (
           <li key={tpl.id} className="flex items-center gap-3 px-3 py-2.5">
             <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing(tpl)}>
-              <p className="truncate font-medium">{tpl.name}</p>
+              <p className="break-words font-medium">{tpl.name}</p>
               <p className="truncate text-xs text-muted">{templateTypeLabel(tpl.type)} · {tpl.text.replace(/\s+/g, ' ')}</p>
             </button>
             {!bool(tpl.active) && <StatusBadge status="Inactive" />}

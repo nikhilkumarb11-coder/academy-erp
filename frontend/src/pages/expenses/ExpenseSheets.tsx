@@ -133,7 +133,7 @@ export function CategoriesSheet({ onClose }: { onClose: () => void }) {
               </form>
             ) : (
               <>
-                <span className="flex-1 truncate">{c.name}</span>
+                <span className="flex-1 break-words">{c.name}</span>
                 <button type="button" aria-label={`Rename ${c.name}`} onClick={() => setRenaming({ id: c.id, name: c.name })}
                   className="grid size-10 place-items-center rounded-xl text-muted hover:bg-primary-soft hover:text-primary"><Pencil className="size-4" aria-hidden /></button>
                 <button type="button" aria-label={`Delete ${c.name}`} disabled={remove.isPending}
@@ -170,7 +170,7 @@ export function RecurringSheet({ onClose }: { onClose: () => void }) {
             <li key={r.id}>
               <button type="button" onClick={() => setEditing(r)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-canvas">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{r.payee} <span className="font-normal text-muted">· {catName(r.category_id)}</span></p>
+                  <p className="break-words font-medium">{r.payee} <span className="font-normal text-muted">· {catName(r.category_id)}</span></p>
                   <p className="text-xs text-muted">
                     Day {num(r.day_of_month)} of every month · {bool(r.auto_create) ? 'added automatically' : 'record by hand'}
                     {!bool(r.active) && ' · paused'}

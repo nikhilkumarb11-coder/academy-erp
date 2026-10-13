@@ -157,14 +157,14 @@ export function StudentsPage() {
                 <Link to={`/students/${student.id}`} className="block rounded-2xl border border-line bg-surface p-4 active:bg-primary-soft">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{student.name}</p>
-                      <p className="truncate text-xs text-muted">
+                      <p className="break-words font-medium">{student.name}</p>
+                      <p className="break-words text-xs text-muted">
                         {[parent?.guardian_name, student.class && `${labels.class} ${student.class}`].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <StatusBadge status={student.status} />
                   </div>
-                  {names.length > 0 && <p className="mt-2 truncate text-sm text-muted">{names.join(', ')}</p>}
+                  {names.length > 0 && <p className="mt-2 break-words text-sm text-muted">{names.join(', ')}</p>}
                 </Link>
               </li>
             ))}

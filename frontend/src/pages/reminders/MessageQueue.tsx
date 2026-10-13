@@ -63,8 +63,8 @@ export function MessageQueue({ items, type, templateId, onExit }: { items: Queue
           <div className="mb-3 flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium text-muted tabular-nums">{index + 1} of {items.length}</p>
-              <p className="truncate text-lg font-semibold">{item.name}</p>
-              <p className="truncate text-sm text-muted">{item.subtitle}</p>
+              <p className="break-words text-lg font-semibold">{item.name}</p>
+              <p className="break-words text-sm text-muted">{item.subtitle}</p>
               <p className="text-xs text-muted">{formatPhone(item.phone)}</p>
             </div>
             {item.amount && <p className="shrink-0 text-lg font-semibold tabular-nums">{item.amount}</p>}
@@ -111,7 +111,7 @@ export function MessageQueue({ items, type, templateId, onExit }: { items: Queue
               <button type="button" onClick={() => setIndex(i)}
                 className={clsx('flex w-full items-center gap-3 px-4 py-2.5 text-left', i === index && 'bg-primary-soft')}>
                 <span className="w-6 shrink-0 text-xs text-muted tabular-nums">{i + 1}</span>
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">{it.name}</span>
+                <span className="min-w-0 flex-1 break-words text-sm font-medium">{it.name}</span>
                 {it.amount && <span className="text-sm tabular-nums text-muted">{it.amount}</span>}
                 {outcome && (
                   <span className={clsx('rounded-full px-2 py-0.5 text-xs font-medium', outcome === 'sent' ? 'bg-success/10 text-success' : 'bg-line text-muted')}>

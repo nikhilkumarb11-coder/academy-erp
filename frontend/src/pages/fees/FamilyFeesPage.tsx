@@ -79,7 +79,7 @@ export function FamilyFeesPage() {
       <li key={d.id}>
         <button type="button" onClick={() => setAdjusting(d)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-primary-soft/60">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-medium">{title}{period && <span className="font-normal text-muted"> · {period}</span>}</p>
+            <p className="break-words font-medium">{title}{period && <span className="font-normal text-muted"> · {period}</span>}</p>
             <p className="text-xs text-muted">
               Due {formatDate(d.due_date)}
               {num(d.amount_paid) > 0 && isOpenDue(d) && ` · ${money(num(d.amount_paid))} paid`}
@@ -103,7 +103,7 @@ export function FamilyFeesPage() {
       <Card className="mb-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold">{parent.guardian_name}</h1>
+            <h1 className="break-words text-2xl font-semibold">{parent.guardian_name}</h1>
             <p className="text-sm text-muted">
               {children.map((c, i) => (
                 <span key={c.id}>{i > 0 && ', '}<Link to={`/students/${c.id}`} className="hover:text-primary">{c.name}</Link></span>
@@ -171,7 +171,7 @@ export function FamilyFeesPage() {
                       <div className="min-w-0">
                         <p className={clsx('font-medium tabular-nums', cancelled && 'text-muted line-through')}>{money(num(p.amount))} <span className="text-sm font-normal text-muted">· {p.mode}</span></p>
                         <p className="text-xs text-muted">{p.receipt_no} · {formatDate(p.paid_at)}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted">
+                        <p className="mt-0.5 break-words text-xs text-muted">
                           {lines.map((l) => [l.title, l.period].filter(Boolean).join(' ')).join(', ') || (cancelled ? '' : 'Advance')}
                         </p>
                         {cancelled && p.cancel_reason && <p className="text-xs text-danger">Cancelled: {p.cancel_reason}</p>}

@@ -120,7 +120,7 @@ function CoursesTab() {
                       <button type="button" onClick={() => setCourse({ course: c })} className="flex min-h-16 w-full items-center gap-3 px-4 py-2 text-left hover:bg-primary-soft">
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-2">
-                            <span className="truncate font-medium">{c.name}</span>
+                            <span className="break-words font-medium">{c.name}</span>
                             {!bool(c.active) && <StatusBadge status="Inactive" />}
                           </span>
                           <span className="block text-xs text-muted">

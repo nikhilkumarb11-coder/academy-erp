@@ -36,7 +36,7 @@ export function BalanceItemsSheet({ onClose }: { onClose: () => void }) {
             <li key={b.id}>
               <button type="button" onClick={() => setEditing(b)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-canvas">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{b.name}</p>
+                  <p className="break-words font-medium">{b.name}</p>
                   <p className="text-xs text-muted">{b.type === 'Asset' ? 'Owns' : 'Owes'}{b.as_of_date && ` · as of ${formatDate(b.as_of_date)}`}</p>
                 </div>
                 <span className="font-medium tabular-nums">{money(num(b.amount))}</span>

@@ -71,7 +71,7 @@ export function ExpensesPage() {
               <ul className="mt-4 space-y-2.5">
                 {view.split.map((s) => (
                   <li key={s.id} className="grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3 text-sm">
-                    <span className="truncate">{catName(s.id)}</span>
+                    <span className="break-words">{catName(s.id)}</span>
                     <span className="h-2.5 overflow-hidden rounded-full bg-primary-soft">
                       <span className="block h-full rounded-full bg-accent" style={{ width: `${(s.amount / max) * 100}%` }} />
                     </span>
@@ -89,7 +89,7 @@ export function ExpensesPage() {
                 {view.due.map((r) => (
                   <li key={r.id} className="flex items-center gap-3 py-2">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{r.payee}</p>
+                      <p className="break-words font-medium">{r.payee}</p>
                       <p className="text-xs text-muted">{catName(r.category_id)} · day {num(r.day_of_month)} · {money(num(r.amount))}</p>
                     </div>
                     <Button variant="secondary" className="min-h-9" onClick={() => setOpen({ kind: 'expense', draft: { from: r, month } })}>Record</Button>
@@ -110,8 +110,8 @@ export function ExpensesPage() {
                 <li key={e.id}>
                   <button type="button" onClick={() => setOpen({ kind: 'expense', draft: { expense: e } })} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-canvas">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{e.payee || catName(e.category_id)}</p>
-                      <p className="truncate text-xs text-muted">
+                      <p className="break-words font-medium">{e.payee || catName(e.category_id)}</p>
+                      <p className="break-words text-xs text-muted">
                         {formatDate(e.date)} · {catName(e.category_id)} · {e.mode}
                         {e.source === 'Recurring' && <Repeat className="ml-1 inline size-3" aria-label="recurring" />}
                         {e.notes && ` · ${e.notes}`}
