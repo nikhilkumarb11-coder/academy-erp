@@ -24,6 +24,14 @@ describe('whatsapp', () => {
     expect(fillMessage(preset, { balance: '800', academy: 'Rays' })).toBe('Fee of ₹800 is pending.\n\nThank you,\nRays');
   });
 
+  it('drops the receipt link when the PDF itself is shared', () => {
+    const text = 'Dear {parent}, we received ₹{amount}. Receipt no. {receipt_no}: {receipt_link}\nBalance: ₹{balance}';
+    expect(fillMessage(text, { parent: 'Asha', amount: '500', receipt_no: 'R/1', receipt_link: '', balance: '0' }))
+      .toBe('Dear Asha, we received ₹500. Receipt no. R/1\nBalance: ₹0');
+    expect(fillMessage(text, { parent: 'Asha', amount: '500', receipt_no: 'R/1', receipt_link: 'https://x', balance: '0' }))
+      .toContain('R/1: https://x');
+  });
+
   it('lists placeholders once, in order', () => {
     expect(placeholdersIn('{event} on {date}. {details} {event}')).toEqual(['event', 'date', 'details']);
   });

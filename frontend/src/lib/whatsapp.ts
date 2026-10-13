@@ -49,8 +49,9 @@ export function placeholdersIn(text: string): string[] {
 
 /** Online payment links arrive with Razorpay; until then drop the "Pay … here:" part rather than send a blank link. */
 export function fillMessage(text: string, values: Record<string, string | number>): string {
-  const withoutLink = values.payment_link
+  let withoutLink = values.payment_link
     ? text
     : text.replace(/[^\S\n]*Pay[^.\n{]*:\s*\{payment_link\}\.?/i, '').replace(/\{payment_link\}/g, '');
+  if (!values.receipt_link) withoutLink = withoutLink.replace(/:?[^\S\n]*\{receipt_link\}/g, '');
   return fillTemplate(withoutLink, values).replace(/\n{3,}/g, '\n\n');
 }

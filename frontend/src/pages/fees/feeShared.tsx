@@ -133,23 +133,36 @@ export function useReceiptActions() {
     }
   }
 
-  /** Native share sheet with the PDF attached (phones); falls back to WhatsApp with the link. */
-  function shareNow(payment: Payment, res: ReceiptResult) {
-    const file = res.file && fileFrom(res.file);
-    if (file && navigator.canShare({ files: [file] })) {
-      return navigator.share({ files: [file], text: message(payment, res.url), title: `Receipt ${res.receipt_no}` });
+  function download(file: File) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  /** Shares the PDF itself (no Drive link); where files cannot be shared, downloads it instead. */
+  async function shareNow(payment: Payment, res: ReceiptResult) {
+    if (!res.file) throw new Error('The receipt PDF could not be loaded. Please retry.');
+    const file = fileFrom(res.file);
+    if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], text: message(payment, ''), title: `Receipt ${res.receipt_no}` });
+      return;
     }
-    return navigator.share({ text: message(payment, res.url) });
+    download(file);
+    toast('Receipt PDF downloaded. Attach it in WhatsApp to send.', 'success');
   }
 
   /**
-   * Native share sheet with the PDF attached (phones); falls back to WhatsApp with the link.
-   * When the PDF was not ready at the tap, the browser refuses the share sheet; the PDF is then
-   * kept and the next tap shares it at once.
+   * Shares the receipt as a PDF file. When the PDF was not ready at the tap, the browser refuses
+   * the share sheet; the PDF is then kept and the next tap shares it at once.
+   * The demo has no real PDF, so it sends the link on WhatsApp.
    */
   async function share(payment: Payment) {
-    const canShareFiles = !isDemo && typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
-    if (!canShareFiles) return sendWhatsApp(payment);
+    if (isDemo) return sendWhatsApp(payment);
     const entry = prepare(payment);
     try {
       if (entry.result) {
@@ -188,9 +201,9 @@ export function useReceiptActions() {
     }
   }
 
-  /** Fetches the receipt ahead of a likely Share tap (phones with a share sheet only). */
+  /** Fetches the receipt PDF ahead of a likely Share tap. */
   function warmUp(payment: Payment) {
-    if (!isDemo && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') prepare(payment);
+    if (!isDemo) prepare(payment);
   }
 
   return { share, sendWhatsApp, open, warmUp };
