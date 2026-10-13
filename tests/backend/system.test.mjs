@@ -124,3 +124,42 @@ describe('import', () => {
     assert.match((await be.call('import.students', { rows: many }, token)).error.message, /at most 500/);
   });
 });
+
+describe('sync', () => {
+  const readsOf = (be, tabs) => tabs.reduce((n, tab) => n + be.state.spreadsheet.getSheetByName(tab).reads, 0);
+
+  it('skips tabs nothing wrote to since the last sync', async () => {
+    const { be, token } = await seeded();
+    const boot = await be.ok('system.bootstrap', {}, token);
+    be.state.today = '2026-10-14';
+    const fresh = await be.login();
+    const first = await be.ok('system.sync', { since: boot.serverTime }, fresh);
+
+    const before = readsOf(be, ['Courses', 'Students', 'Settings', 'FeeDues']);
+    const quiet = await be.ok('system.sync', { since: first.serverTime }, fresh);
+    assert.equal(readsOf(be, ['Courses', 'Students', 'Settings', 'FeeDues']), before, 'unchanged tabs are not read');
+    assert.equal(quiet.settings, undefined);
+    assert.deepEqual(quiet.Courses, []);
+
+    const course = boot.Courses.find((c) => c.name === 'Karate');
+    const plan = boot.FeePlans.find((p) => p.frequency === 'Monthly');
+    await be.ok('admissions.create', {
+      parent: { guardian_name: 'Asha', phone: '9000000009' },
+      students: [{ name: 'Ira', enrollments: [{ course_id: course.id, fee_plan_id: plan.id }] }],
+    }, fresh);
+    const coursesRead = readsOf(be, ['Courses']);
+    const delta = await be.ok('system.sync', { since: quiet.serverTime }, fresh);
+    assert.deepEqual(delta.Students.map((s) => s.name), ['Ira']);
+    assert.equal(delta.Parents.length, 1);
+    assert.equal(readsOf(be, ['Courses']), coursesRead, 'courses were only read by the admission, not by sync');
+  });
+
+  it('appends audit entries without reading the log', async () => {
+    const { be, token } = await seeded();
+    const before = readsOf(be, ['AuditLog']);
+    await be.ok('settings.update', { academy_phone: '9000000000' }, token);
+    await be.ok('settings.update', { academy_phone: '9000000001' }, token);
+    assert.equal(readsOf(be, ['AuditLog']) - before, 2, 'only the header row is read, once per request');
+    assert.equal(be.sheetRows('AuditLog').filter((r) => r.action === 'settings.update').length, 2);
+  });
+});

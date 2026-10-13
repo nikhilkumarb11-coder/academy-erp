@@ -57,6 +57,9 @@ class FakeSheet {
     this.s.rows.forEach((row) => row?.forEach((v, c) => { if (v !== '' && v !== null && v !== undefined) last = Math.max(last, c + 1); }));
     return last;
   }
+  getDataRange() {
+    return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1));
+  }
   getRange(row: number, col: number, numRows = 1, numCols = 1) {
     if (row + numRows - 1 > this.s.maxRows) throw new Error('The coordinates of the range are outside the dimensions of the sheet.');
     return new FakeRange(this, row, col, numRows, numCols);
@@ -200,7 +203,9 @@ export function googleServices(state: DemoState) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k: string) => (k in state.props ? state.props[k] : null),
+        getProperties: () => ({ ...state.props }),
         setProperty: (k: string, v: unknown) => { state.props[k] = String(v); },
+        setProperties: (values: Record<string, string>) => { Object.assign(state.props, values); },
         deleteProperty: (k: string) => { delete state.props[k]; },
       }),
     },

@@ -22,6 +22,7 @@ function doPost(e) {
     const ctx = { device: String(request.device || '').slice(0, 60) };
     if (!route.public) Object.assign(ctx, Auth.verify(request.token));
     const data = route.handler(request.payload || {}, ctx);
+    Db.saveStamps();
     return jsonResponse({ ok: true, data });
   } catch (err) {
     const known = err instanceof AppError;

@@ -40,6 +40,7 @@ class FakeSheet {
     this.formats = new Map(); // column -> number format
     this.maxRows = 1000;
     this.protections = [];
+    this.reads = 0; // getValues calls, to check which tabs a request reads
   }
   getName() { return this.name; }
   getMaxRows() { return this.maxRows; }
@@ -55,6 +56,9 @@ class FakeSheet {
     let last = 0;
     for (const [k, v] of this.cells) if (v !== '' && v !== null && v !== undefined) last = Math.max(last, Number(k.split(',')[1]));
     return last;
+  }
+  getDataRange() {
+    return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1));
   }
   getRange(row, col, numRows = 1, numCols = 1) {
     if (row < 1 || col < 1 || numRows < 1 || numCols < 1) throw new Error(`Invalid range ${row},${col},${numRows},${numCols}`);
@@ -77,6 +81,7 @@ class FakeRange {
     Object.assign(this, { sheet, row, col, numRows, numCols });
   }
   getValues() {
+    this.sheet.reads += 1;
     const out = [];
     for (let r = 0; r < this.numRows; r++) {
       const line = [];
@@ -190,7 +195,9 @@ function services(state) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in state.props ? state.props[k] : null),
+        getProperties: () => ({ ...state.props }),
         setProperty: (k, v) => { state.props[k] = String(v); },
+        setProperties: (values) => { Object.assign(state.props, values); },
         deleteProperty: (k) => { delete state.props[k]; },
       }),
     },

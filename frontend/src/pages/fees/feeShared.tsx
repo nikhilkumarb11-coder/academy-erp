@@ -32,6 +32,14 @@ function fileFrom(file: NonNullable<ReceiptResult['file']>): File {
   return new File([bytes], file.name, { type: file.mimeType });
 }
 
+interface PreparedReceipt {
+  promise: Promise<ReceiptResult>;
+  result?: ReceiptResult;
+}
+
+/** Receipts fetched with their PDF, per payment and status, so a later tap can share without waiting. */
+const prepared = new Map<string, PreparedReceipt>();
+
 /** Lines of a payment: which child, course and period it paid. */
 export function paymentLines(t: CoreTables, payment: Payment) {
   return t.PaymentAllocations.filter((a) => a.payment_id === payment.id && a.due_id).map((a) => {
@@ -44,7 +52,8 @@ export function paymentLines(t: CoreTables, payment: Payment) {
 
 /**
  * Receipt actions (PRD §6.5). The PDF is created in Drive on first use, so these call receipts.get.
- * A tab is opened before the request because browsers block pop-ups opened after an await.
+ * Browsers only allow pop-ups and the share sheet straight after a tap, not after a slow request:
+ * links open in a tab created before the request, and sharing uses a receipt fetched ahead (prepare).
  */
 export function useReceiptActions() {
   const tenant = useTenant();
@@ -60,6 +69,29 @@ export function useReceiptActions() {
     const res = await api<ReceiptResult>('receipts.get', { payment_id: paymentId, withFile });
     if (res.changes) queryClient.setQueryData<CoreData>(coreKey(tenant.slug), (old) => (old ? applyChanges(old, res.changes) : old));
     return res;
+  }
+
+  const preparedKey = (payment: Payment) => `${tenant.slug}:${payment.id}:${payment.status}`;
+
+  /** Starts fetching the receipt PDF so Share can open the share sheet instantly. */
+  function prepare(payment: Payment): PreparedReceipt {
+    const key = preparedKey(payment);
+    let entry = prepared.get(key);
+    if (!entry) {
+      const created: PreparedReceipt = { promise: fetchReceipt(payment.id, true) };
+      created.promise.then(
+        (res) => { created.result = res; },
+        () => { prepared.delete(key); },
+      );
+      prepared.set(key, created);
+      entry = created;
+    }
+    return entry;
+  }
+
+  /** The receipt link, reusing a prepared receipt so one payment never creates two PDFs. */
+  function receiptFor(payment: Payment) {
+    return prepared.get(preparedKey(payment))?.promise ?? fetchReceipt(payment.id);
   }
 
   function link(paymentId: string, url: string) {
@@ -88,7 +120,7 @@ export function useReceiptActions() {
   async function sendWhatsApp(payment: Payment) {
     const tab = window.open('', '_blank');
     try {
-      const res = await fetchReceipt(payment.id);
+      const res = await receiptFor(payment);
       const phone = data?.tables.Parents.find((p) => p.id === payment.parent_id)?.phone ?? '';
       const text = message(payment, link(payment.id, res.url));
       const url = whatsappUrl(phone, text);
@@ -102,17 +134,38 @@ export function useReceiptActions() {
   }
 
   /** Native share sheet with the PDF attached (phones); falls back to WhatsApp with the link. */
+  function shareNow(payment: Payment, res: ReceiptResult) {
+    const file = res.file && fileFrom(res.file);
+    if (file && navigator.canShare({ files: [file] })) {
+      return navigator.share({ files: [file], text: message(payment, res.url), title: `Receipt ${res.receipt_no}` });
+    }
+    return navigator.share({ text: message(payment, res.url) });
+  }
+
+  /**
+   * Native share sheet with the PDF attached (phones); falls back to WhatsApp with the link.
+   * When the PDF was not ready at the tap, the browser refuses the share sheet; the PDF is then
+   * kept and the next tap shares it at once.
+   */
   async function share(payment: Payment) {
-    const canShareFiles = !isDemo && typeof navigator.canShare === 'function';
+    const canShareFiles = !isDemo && typeof navigator.share === 'function' && typeof navigator.canShare === 'function';
     if (!canShareFiles) return sendWhatsApp(payment);
+    const entry = prepare(payment);
     try {
-      const res = await fetchReceipt(payment.id, true);
-      const file = res.file && fileFrom(res.file);
-      if (file && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], text: message(payment, res.url), title: `Receipt ${res.receipt_no}` });
+      if (entry.result) {
+        await shareNow(payment, entry.result);
         return;
       }
-      await navigator.share({ text: message(payment, res.url) });
+      const res = await entry.promise;
+      try {
+        await shareNow(payment, res);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'NotAllowedError') {
+          toast('Receipt is ready. Tap Share again to send it.', 'success');
+          return;
+        }
+        throw err;
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       toast(errorMessage(err), 'error');
@@ -126,7 +179,7 @@ export function useReceiptActions() {
     }
     const tab = window.open('', '_blank');
     try {
-      const res = await fetchReceipt(payment.id);
+      const res = await receiptFor(payment);
       if (tab) tab.location.href = res.url;
       else window.location.href = res.url;
     } catch (err) {
@@ -135,7 +188,12 @@ export function useReceiptActions() {
     }
   }
 
-  return { share, sendWhatsApp, open };
+  /** Fetches the receipt ahead of a likely Share tap (phones with a share sheet only). */
+  function warmUp(payment: Payment) {
+    if (!isDemo && typeof navigator.share === 'function' && typeof navigator.canShare === 'function') prepare(payment);
+  }
+
+  return { share, sendWhatsApp, open, warmUp };
 }
 
 export interface FamilyReminder {

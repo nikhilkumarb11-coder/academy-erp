@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { CheckCircle2, ExternalLink, MessageCircle, Share2 } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { errorField, fieldError } from '../../api/fieldErrors';
 import { errorMessage } from '../../api/errors';
 import { Sheet } from '../../components/Sheet';
@@ -172,6 +172,10 @@ export function PaymentDoneSheet({ paymentId, onClose }: { paymentId: string; on
   const receipt = useReceiptActions();
   const [busy, setBusy] = useState<string | null>(null);
   const payment = t?.Payments.find((p) => p.id === paymentId);
+  const { warmUp } = receipt;
+  useEffect(() => {
+    if (payment) warmUp(payment);
+  }, [payment, warmUp]);
   if (!payment) return null;
   const parent = t?.Parents.find((p) => p.id === payment.parent_id);
   const run = (key: string, fn: (p: Payment) => Promise<void>) => async () => {

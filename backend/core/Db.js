@@ -18,16 +18,70 @@ const Db = (() => {
     return sh;
   }
 
+  const touched = {}; // tabs written in this execution, for sync stamps
+  let locked = false;
+
   function load(tab) {
+    if (cache[tab] && !cache[tab].partial) return cache[tab];
+    const sh = sheet(tab);
+    const values = sh.getDataRange().getValues();
+    const headers = values[0].map(String);
+    const rows = values.slice(1).map((r) => toObject(headers, r));
+    cache[tab] = { sheet: sh, headers, rows, lastRow: values.length, lastRowTrusted: locked, maxRows: null };
+    return cache[tab];
+  }
+
+  /** Headers and row count only, for append-only tabs whose rows the request never reads. */
+  function loadForAppend(tab) {
     if (cache[tab]) return cache[tab];
     const sh = sheet(tab);
     const lastRow = sh.getLastRow();
-    const lastCol = sh.getLastColumn();
-    const values = lastRow > 0 && lastCol > 0 ? sh.getRange(1, 1, lastRow, lastCol).getValues() : [[]];
-    const headers = values[0].map(String);
-    const rows = values.slice(1).map((r) => toObject(headers, r));
-    cache[tab] = { sheet: sh, headers, rows };
+    const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    cache[tab] = { sheet: sh, headers, rows: [], lastRow, lastRowTrusted: locked, maxRows: null, partial: true };
     return cache[tab];
+  }
+
+  /**
+   * A tab read before the lock may miss rows another device appended since; re-read it before
+   * appending so row positions stay right.
+   */
+  function forAppend(tab, t) {
+    if (t.lastRowTrusted) return t;
+    const live = t.sheet.getLastRow();
+    if (live !== t.lastRow && !t.partial) {
+      delete cache[tab];
+      return forAppend(tab, load(tab));
+    }
+    t.lastRow = live;
+    t.lastRowTrusted = locked;
+    return t;
+  }
+
+  function maxRows(t) {
+    if (t.maxRows === null) t.maxRows = t.sheet.getMaxRows();
+    return t.maxRows;
+  }
+
+  function touch(tab) {
+    touched[tab] = true;
+  }
+
+  /**
+   * Records when each written tab last changed (Script Properties "stamp:<Tab>"), so system.sync can
+   * skip tabs nothing has touched. Call after the writes are flushed.
+   */
+  function saveStamps() {
+    const tabs = Object.keys(touched);
+    if (!tabs.length) return;
+    const now = Util.nowIso();
+    const values = {};
+    tabs.forEach((tab) => { values[`stamp:${tab}`] = now; delete touched[tab]; });
+    Util.setProps(values);
+  }
+
+  /** Last change time of a tab, or null when unknown. */
+  function stamp(tab) {
+    return Util.prop(`stamp:${tab}`);
   }
 
   function toObject(headers, row) {
@@ -80,8 +134,17 @@ const Db = (() => {
 
   /** Appends rows in one setValues call. Fills id, created_at, updated_at when the tab has them. */
   function insert(tab, objs, idPrefix) {
+    return write(load, tab, objs, idPrefix);
+  }
+
+  /** Like insert, without reading existing rows (audit and message logs grow without bound). */
+  function append(tab, objs, idPrefix) {
+    return write(loadForAppend, tab, objs, idPrefix);
+  }
+
+  function write(loader, tab, objs, idPrefix) {
     if (!objs.length) return [];
-    const t = load(tab);
+    const t = forAppend(tab, loader(tab));
     const now = Util.nowIso();
     const prepared = objs.map((o) => {
       const row = Object.assign({}, o);
@@ -91,14 +154,20 @@ const Db = (() => {
       if (t.headers.includes('deleted') && row.deleted === undefined) row.deleted = false;
       return row;
     });
-    const startRow = t.sheet.getLastRow() + 1;
-    const needed = startRow + prepared.length - 1 - t.sheet.getMaxRows();
-    if (needed > 0) t.sheet.insertRowsAfter(t.sheet.getMaxRows(), Math.max(needed, 500));
+    const startRow = t.lastRow + 1;
+    const needed = startRow + prepared.length - 1 - maxRows(t);
+    if (needed > 0) {
+      const add = Math.max(needed, 500);
+      t.sheet.insertRowsAfter(t.maxRows, add);
+      t.maxRows += add;
+    }
     const range = t.sheet.getRange(startRow, 1, prepared.length, t.headers.length);
     const formats = t.headers.map((h) => (TEXT_COLUMN_PATTERN.test(h) ? '@' : 'General'));
     range.setNumberFormats(prepared.map(() => formats));
     range.setValues(prepared.map((r) => toRow(t.headers, r)));
-    t.rows.push(...prepared.map((r) => toObject(t.headers, toRow(t.headers, r))));
+    t.lastRow += prepared.length;
+    if (!t.partial) t.rows.push(...prepared.map((r) => toObject(t.headers, toRow(t.headers, r))));
+    touch(tab);
     return prepared;
   }
 
@@ -111,7 +180,7 @@ const Db = (() => {
     const t = load(tab);
     const now = Util.nowIso();
     const indexById = new Map(t.rows.map((r, i) => [r.id, i]));
-    const touched = [];
+    const changed = [];
 
     patches.forEach((p) => {
       const i = indexById.get(p.id);
@@ -119,15 +188,16 @@ const Db = (() => {
       const merged = Object.assign({}, t.rows[i], p);
       if (t.headers.includes('updated_at')) merged.updated_at = now;
       t.rows[i] = merged;
-      touched.push(i);
+      changed.push(i);
     });
 
-    if (touched.length > 20) {
+    if (changed.length > 20) {
       t.sheet.getRange(2, 1, t.rows.length, t.headers.length).setValues(t.rows.map((r) => toRow(t.headers, r)));
     } else {
-      touched.forEach((i) => t.sheet.getRange(i + 2, 1, 1, t.headers.length).setValues([toRow(t.headers, t.rows[i])]));
+      changed.forEach((i) => t.sheet.getRange(i + 2, 1, 1, t.headers.length).setValues([toRow(t.headers, t.rows[i])]));
     }
-    return touched.map((i) => t.rows[i]);
+    touch(tab);
+    return changed.map((i) => t.rows[i]);
   }
 
   function softDelete(tab, ids) {
@@ -142,7 +212,7 @@ const Db = (() => {
   }
 
   function setMapValues(tab, values) {
-    const t = load(tab);
+    const t = forAppend(tab, load(tab));
     const now = Util.nowIso();
     const existing = new Map(t.rows.map((r, i) => [r.key, i]));
     const toAppend = [];
@@ -153,14 +223,17 @@ const Db = (() => {
       else t.sheet.getRange(i + 2, 1, 1, t.headers.length).setValues([toRow(t.headers, Object.assign(t.rows[i], row))]);
     });
     if (toAppend.length) {
-      t.sheet.getRange(t.sheet.getLastRow() + 1, 1, toAppend.length, t.headers.length)
+      t.sheet.getRange(t.lastRow + 1, 1, toAppend.length, t.headers.length)
         .setValues(toAppend.map((r) => toRow(t.headers, r)));
       t.rows.push(...toAppend);
+      t.lastRow += toAppend.length;
     }
+    touch(tab);
   }
 
   /** Atomic counter, e.g. receipt numbers. Must be called inside withLock. */
   function nextCounter(key) {
+    if (cache.Counters && !cache.Counters.lastRowTrusted) delete cache.Counters;
     const current = Number(getMap('Counters')[key] || 0);
     const next = current + 1;
     setMapValues('Counters', { [key]: next });
@@ -170,14 +243,25 @@ const Db = (() => {
   function withLock(fn) {
     const lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw new AppError('BUSY', 'Another device is saving. Please retry.');
+    const outer = !locked;
+    locked = true;
     try {
       const result = fn();
-      SpreadsheetApp.flush();
+      if (outer) {
+        SpreadsheetApp.flush();
+        saveStamps();
+      }
       return result;
     } finally {
-      lock.releaseLock();
+      if (outer) {
+        locked = false;
+        lock.releaseLock();
+      }
     }
   }
 
-  return { ss, sheet, all, find, where, changedSince, insert, update, softDelete, getMap, setMapValues, nextCounter, withLock, invalidate, isDeleted };
+  return {
+    ss, sheet, all, find, where, changedSince, insert, append, update, softDelete, getMap, setMapValues,
+    nextCounter, withLock, invalidate, isDeleted, saveStamps, stamp,
+  };
 })();

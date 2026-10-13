@@ -8,19 +8,35 @@ class AppError extends Error {
 
 const Util = (() => {
   const props = () => PropertiesService.getScriptProperties();
+  let propCache = null; // per-execution copy; each service call costs a round trip
+  let zone = null;
+
+  function allProps() {
+    if (!propCache) propCache = props().getProperties();
+    return propCache;
+  }
 
   function prop(key, required) {
-    const value = props().getProperty(key);
+    const value = allProps()[key] || null;
     if (required && !value) throw new AppError('CONFIG', `Script Property ${key} is not set`);
     return value;
   }
 
   function setProp(key, value) {
     props().setProperty(key, String(value));
+    if (propCache) propCache[key] = String(value);
+  }
+
+  function setProps(values) {
+    const clean = {};
+    Object.keys(values).forEach((k) => { clean[k] = String(values[k]); });
+    props().setProperties(clean);
+    if (propCache) Object.assign(propCache, clean);
   }
 
   function tz() {
-    return Session.getScriptTimeZone() || 'Asia/Kolkata';
+    if (!zone) zone = Session.getScriptTimeZone() || 'Asia/Kolkata';
+    return zone;
   }
 
   function nowIso() {
@@ -70,5 +86,5 @@ const Util = (() => {
     if (missing.length) throw new AppError('VALIDATION', `Missing: ${missing.join(', ')}`, { missing });
   }
 
-  return { prop, setProp, tz, nowIso, today, newId, base64url, fromBase64url, hmac, sha256Hex, safeEqual, requireFields };
+  return { prop, setProp, setProps, tz, nowIso, today, newId, base64url, fromBase64url, hmac, sha256Hex, safeEqual, requireFields };
 })();

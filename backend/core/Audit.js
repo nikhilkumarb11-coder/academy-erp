@@ -1,7 +1,7 @@
 /** Append-only audit trail. Call inside the same lock as the write it describes. */
 const Audit = (() => {
   function log(action, entity, entityId, summary, ctx) {
-    Db.insert('AuditLog', [{
+    Db.append('AuditLog', [{
       timestamp: Util.nowIso(),
       action,
       entity,

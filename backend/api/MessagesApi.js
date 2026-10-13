@@ -27,7 +27,7 @@ const MessagesApi = (() => {
     }));
 
     return Db.withLock(() => {
-      const logged = Db.insert('MessageLog', rows, 'MSG');
+      const logged = Db.append('MessageLog', rows, 'MSG');
       const groupIds = [...new Set(rows.map((r) => r.group_id).filter(Boolean))]
         .filter((id) => { const g = Db.find('WhatsAppGroups', id); return g && !Db.isDeleted(g); });
       const groups = Db.update('WhatsAppGroups', groupIds.map((id) => ({ id, last_sent_at: sentAt })));

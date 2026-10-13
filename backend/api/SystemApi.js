@@ -16,13 +16,31 @@ const SystemApi = (() => {
     return data;
   }
 
-  /** Delta refresh: rows changed after `since`, including soft-deleted ones. */
+  /** Overlap that covers writes still in flight when the previous sync read the sheet. */
+  const SYNC_OVERLAP_MS = 60 * 1000;
+
+  /**
+   * Delta refresh: rows changed after `since`, including soft-deleted ones. Tabs whose change stamp
+   * (set by every Db write) is older than `since` are not read at all; settings are omitted when unchanged.
+   */
   function sync(payload) {
     Util.requireFields(payload, ['since']);
     Migrate.ensureCurrent();
     ExpensesApi.runRecurringIfDue();
-    const data = { settings: Db.getMap('Settings'), serverTime: Util.nowIso() };
-    BOOTSTRAP_TABS.forEach((tab) => { data[tab] = Db.changedSince(tab, payload.since); });
+    const serverTime = Util.nowIso();
+    const sinceMs = new Date(payload.since).getTime();
+    const since = isNaN(sinceMs) ? String(payload.since) : Utilities.formatDate(new Date(sinceMs - SYNC_OVERLAP_MS), Util.tz(), "yyyy-MM-dd'T'HH:mm:ssXXX");
+    const missing = {};
+    const unchanged = (tab) => {
+      const stamp = Db.stamp(tab);
+      if (!stamp) missing[`stamp:${tab}`] = since;
+      return !!stamp && stamp < since;
+    };
+
+    const data = { serverTime };
+    if (!unchanged('Settings')) data.settings = Db.getMap('Settings');
+    BOOTSTRAP_TABS.forEach((tab) => { data[tab] = unchanged(tab) ? [] : Db.changedSince(tab, since); });
+    if (Object.keys(missing).length) Util.setProps(missing);
     return data;
   }
 
