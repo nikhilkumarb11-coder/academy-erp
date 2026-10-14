@@ -213,7 +213,10 @@ export function googleServices(state: DemoState) {
       getScriptCache: () => ({
         get: (k: string) => (k in state.cache ? state.cache[k] : null),
         put: (k: string, v: unknown) => { state.cache[k] = String(v); },
+        getAll: (keys: string[]) => Object.fromEntries(keys.filter((k) => k in state.cache).map((k) => [k, state.cache[k]])),
+        putAll: (values: Record<string, unknown>) => { Object.keys(values).forEach((k) => { state.cache[k] = String(values[k]); }); },
         remove: (k: string) => { delete state.cache[k]; },
+        removeAll: (keys: string[]) => { keys.forEach((k) => { delete state.cache[k]; }); },
       }),
     },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
@@ -227,7 +230,8 @@ export function googleServices(state: DemoState) {
       base64EncodeWebSafe: (v: string | number[]) => toBase64(toBytes(v)).replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: (s: string) => signed(fromBase64(s.replace(/-/g, '+').replace(/_/g, '/'))),
       base64Encode: (v: string | number[]) => toBase64(toBytes(v)),
-      newBlob: (bytes: number[]) => ({ getDataAsString: () => new TextDecoder().decode(toBytes(bytes)) }),
+      base64Decode: (s: string) => signed(fromBase64(s)),
+      newBlob: (bytes: number[], _type?: string, name?: string) => blobOf(new TextDecoder().decode(toBytes(bytes))).setName(name ?? ''),
     },
     ContentService: {
       MimeType: { JSON: 'application/json' },

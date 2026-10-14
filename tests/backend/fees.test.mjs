@@ -230,6 +230,23 @@ describe('payments', () => {
     assert.match(html, /Aarav/);
   });
 
+  it('stores the PDF made by the app without rendering one, and rejects anything else', async () => {
+    const pay = await f.be.ok('payments.record', { parent_id: f.parentId, amount: 700, mode: 'UPI' }, f.token);
+    const bad = await f.be.call('receipts.get', { payment_id: pay.payment_id, pdf: Buffer.from('<html>').toString('base64') }, f.token);
+    assert.equal(bad.error.code, 'VALIDATION');
+    const before = Object.keys(f.be.state.drive.files).length;
+    const pdf = Buffer.from('%PDF-1.4 app receipt').toString('base64');
+    const res = await f.be.ok('receipts.get', { payment_id: pay.payment_id, pdf }, f.token);
+    assert.equal(res.changes.Receipts.length, 1);
+    const files = Object.values(f.be.state.drive.files).slice(before);
+    assert.equal(files.length, 1);
+    assert.equal(files[0].bytes.toString(), '%PDF-1.4 app receipt');
+    assert.equal(files[0].sharing, 'ANYONE_WITH_LINK:VIEW');
+    const again = await f.be.ok('receipts.get', { payment_id: pay.payment_id, pdf }, f.token);
+    assert.equal(again.url, res.url);
+    assert.equal(Object.keys(f.be.state.drive.files).length, before + 1);
+  });
+
   it('brands the receipt with the logo, tagline, colours and contact footer', async () => {
     await f.be.ok('settings.update', {
       academy_name: 'Rays Academy',

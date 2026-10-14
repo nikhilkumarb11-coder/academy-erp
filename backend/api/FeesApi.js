@@ -284,22 +284,33 @@ const FeesApi = (() => {
   // ---------- receipts ----------
 
   /**
-   * receipts.get { payment_id, withFile? } — creates the PDF in Drive on first request (and again after a
-   * cancellation, stamped CANCELLED). Returns { receipt_no, url, file?: { name, mimeType, base64 } }.
+   * receipts.get { payment_id, pdf?, withFile? } — saves the receipt PDF in Drive on first request (and again
+   * after a cancellation, stamped CANCELLED). `pdf` is the app's own PDF (base64); without it the server
+   * renders one. Returns { receipt_no, url, file?: { name, mimeType, base64 } }.
    */
   function getReceipt(payload, ctx) {
     Util.requireFields(payload, ['payment_id']);
     const payment = Db.find('Payments', payload.payment_id);
     if (!payment) throw new AppError('NOT_FOUND', 'Payment not found');
     const wanted = payment.status === 'Cancelled' ? 'Cancelled' : 'Active';
-    let receipt = Db.where('Receipts', (r) => r.payment_id === payment.id && r.drive_file_id).pop();
+    const latest = () => Db.where('Receipts', (r) => r.payment_id === payment.id && r.drive_file_id).pop();
+    const current = (r) => !!r && r.status === wanted && !!r.drive_url;
+    let receipt = latest();
     let changes = {};
     let blob = null;
 
-    if (!receipt || receipt.status !== wanted || !receipt.drive_url) {
-      blob = ReceiptPdf.render(payment);
+    if (!current(receipt)) {
+      // A PDF made on the device skips the slow HTML-to-PDF conversion here.
+      blob = payload.pdf ? ReceiptPdf.fromBase64(payload.pdf, payment) : ReceiptPdf.render(payment);
       const file = ReceiptPdf.save(blob);
       changes = Db.withLock(() => {
+        // Another request may have saved this receipt while the PDF was uploading: keep that one.
+        Db.invalidate('Receipts');
+        receipt = latest();
+        if (current(receipt)) {
+          ReceiptPdf.trash(file.id);
+          return {};
+        }
         const row = { receipt_no: payment.receipt_no, payment_id: payment.id, drive_file_id: file.id, drive_url: file.url, status: wanted };
         const saved = receipt ? Db.update('Receipts', [Object.assign({ id: receipt.id }, row)]) : Db.insert('Receipts', [row], 'RCT');
         Audit.log('receipts.create', 'Receipts', saved[0].id, payment.receipt_no, ctx);

@@ -61,6 +61,19 @@ export function httpTransport(apiUrl: string): Transport {
   };
 }
 
+const WARM_EVERY_MS = 120_000;
+let lastWarm = 0;
+
+/**
+ * Wakes the Apps Script runtime with a cheap GET (doGet opens no spreadsheet), so the login that
+ * follows skips most of the cold start. The response is opaque and ignored.
+ */
+export function warmServer(apiUrl: string) {
+  if (!/^https:\/\//.test(apiUrl) || Date.now() - lastWarm < WARM_EVERY_MS) return;
+  lastWarm = Date.now();
+  fetch(apiUrl, { method: 'GET', mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function createApiClient(options: ApiClientOptions): ApiCall {

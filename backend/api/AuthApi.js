@@ -1,7 +1,15 @@
 const AuthApi = (() => {
+  /** auth.login { password, withData? } — withData also returns the bootstrap snapshot, saving a round trip. */
   function login(payload) {
     Util.requireFields(payload, ['password']);
-    return Auth.login(payload.password);
+    const session = Auth.login(payload.password);
+    if (!payload.withData) return session;
+    try {
+      session.data = SystemApi.bootstrap();
+    } catch (e) {
+      console.error('bootstrap at login', e && e.stack); // the client falls back to system.bootstrap
+    }
+    return session;
   }
 
   function changePassword(payload, ctx) {

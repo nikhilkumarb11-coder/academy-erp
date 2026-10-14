@@ -20,12 +20,40 @@ export function createQueryClient() {
   });
 }
 
-/** One IndexedDB entry per tenant so academies sharing a browser never see each other's data. */
+const PERSIST_THROTTLE_MS = 1000;
+
+/**
+ * One IndexedDB entry per tenant so academies sharing a browser never see each other's data.
+ * Every query update asks to persist; writing the whole cache each time stalls the main thread, so
+ * writes are throttled to the latest state once a second, and flushed when the app is hidden.
+ */
 export function idbPersister(slug: string): Persister {
   const key = `erp:${slug}:query-cache`;
+  let latest: PersistedClient | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const flush = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const client = latest;
+    latest = null;
+    if (client) set(key, client).catch(() => {});
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+  }
+
   return {
-    persistClient: (client: PersistedClient) => set(key, client),
+    persistClient: (client: PersistedClient) => {
+      latest = client;
+      timer ??= setTimeout(flush, PERSIST_THROTTLE_MS);
+    },
     restoreClient: () => get<PersistedClient>(key),
-    removeClient: () => del(key),
+    removeClient: () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      latest = null;
+      return del(key);
+    },
   };
 }

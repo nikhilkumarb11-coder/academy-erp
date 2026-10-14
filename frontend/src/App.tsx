@@ -7,6 +7,7 @@ import { FullScreenMessage, Spinner } from './components/ui';
 import { createQueryClient, idbPersister } from './data/queryClient';
 import { CACHE_SHAPE } from './data/types';
 import { useWarmData } from './data/useWarmData';
+import { preloadReceiptPdf } from './lib/receiptPdf';
 import { AppShell } from './layout/AppShell';
 import { ComingSoonPage } from './pages/ComingSoonPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -32,7 +33,10 @@ function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, n
 
 /** Loads every screen's code in the background so switching pages never waits for a download. */
 function preloadRoutes() {
-  const run = () => routeLoaders.forEach((load) => { load().catch(() => {}); });
+  const run = () => {
+    routeLoaders.forEach((load) => { load().catch(() => {}); });
+    preloadReceiptPdf();
+  };
   if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 3000 });
   else setTimeout(run, 1500);
 }

@@ -79,13 +79,17 @@ const ExpensesApi = (() => {
   /** Runs the recurring job at most once a day, from login/sync, so it works even without the trigger. */
   function runRecurringIfDue() {
     const today = Util.today();
-    if (Db.getMap('_meta').recurring_run_on === today) return;
-    Db.withLock(() => {
-      if (Db.getMap('_meta').recurring_run_on === today) return;
-      const created = runRecurring(today);
-      Db.setMapValues('_meta', { recurring_run_on: today });
-      if (created.length) Audit.log('expense.recurring', 'Expenses', '', `${created.length} auto expense(s)`, { device: 'system' });
-    });
+    const cache = CacheService.getScriptCache();
+    if (cache.get('recurring_run_on') === today) return;
+    if (Db.getMap('_meta').recurring_run_on !== today) {
+      Db.withLock(() => {
+        if (Db.getMap('_meta').recurring_run_on === today) return;
+        const created = runRecurring(today);
+        Db.setMapValues('_meta', { recurring_run_on: today });
+        if (created.length) Audit.log('expense.recurring', 'Expenses', '', `${created.length} auto expense(s)`, { device: 'system' });
+      });
+    }
+    cache.put('recurring_run_on', today, 6 * 3600);
   }
 
   return { save, remove, runRecurring, runRecurringIfDue };

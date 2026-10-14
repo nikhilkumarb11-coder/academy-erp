@@ -3,12 +3,15 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../auth/AuthContext';
 import { errorMessage } from '../../api/errors';
 import { useToast } from '../../components/Toast';
-import type { CoreData, CoreTables, Payment } from '../../data/types';
+import type { CoreData, CoreTables, Payment, Settings } from '../../data/types';
 import { applyChanges, type Changes } from '../../data/merge';
 import { coreKey, useCoreData } from '../../data/useCoreData';
 import { useLogMessages } from '../../data/useMessages';
 import { formatMoney } from '../../lib/fees';
+import { byId, groupBy } from '../../lib/indexes';
 import { byDueOrder, dueTitle, isOpenDue } from '../../lib/ledger';
+import { receiptFileName, receiptHtml, receiptLogoUrl } from '../../lib/receipt';
+import { buildReceiptPdf, fileToBase64, logoDataUri } from '../../lib/receiptPdf';
 import { tenantBasePath } from '../../tenant/loadTenant';
 import { useTenant } from '../../tenant/TenantContext';
 import { amountText, fillMessage, templateText, whatsappUrl } from '../../lib/whatsapp';
@@ -24,36 +27,44 @@ interface ReceiptResult {
   changes: Changes;
   receipt_no: string;
   url: string;
-  file?: { name: string; mimeType: string; base64: string };
 }
 
-function fileFrom(file: NonNullable<ReceiptResult['file']>): File {
-  const bytes = Uint8Array.from(atob(file.base64), (c) => c.charCodeAt(0));
-  return new File([bytes], file.name, { type: file.mimeType });
+interface PreparedPdf {
+  promise: Promise<File>;
+  file?: File;
 }
 
-interface PreparedReceipt {
-  promise: Promise<ReceiptResult>;
-  result?: ReceiptResult;
-}
+/** PDFs built on this device, per payment version, so a later tap shares without waiting. */
+const pdfs = new Map<string, PreparedPdf>();
+/** Drive links being created, per payment version, so one payment never uploads twice. */
+const links = new Map<string, Promise<string>>();
 
-/** Receipts fetched with their PDF, per payment and status, so a later tap can share without waiting. */
-const prepared = new Map<string, PreparedReceipt>();
+const receiptStatus = (payment: Payment) => (payment.status === 'Cancelled' ? 'Cancelled' : 'Active');
 
 /** Lines of a payment: which child, course and period it paid. */
 export function paymentLines(t: CoreTables, payment: Payment) {
-  return t.PaymentAllocations.filter((a) => a.payment_id === payment.id && a.due_id).map((a) => {
-    const due = t.FeeDues.find((d) => d.id === a.due_id);
-    const student = t.Students.find((s) => s.id === (due?.student_id ?? a.student_id));
+  const dues = byId(t.FeeDues);
+  const students = byId(t.Students);
+  return (groupBy(t.PaymentAllocations, 'payment_id').get(payment.id) ?? []).filter((a) => a.due_id).map((a) => {
+    const due = dues.get(a.due_id);
+    const student = students.get(due?.student_id ?? a.student_id);
     const { title, period } = due ? dueTitle(t, due) : { title: 'Due', period: '' };
     return { id: a.id, student: student?.name ?? '', title, period, amount: num(a.amount) };
   });
 }
 
+/** Builds the receipt PDF from cached data; the logo is embedded when its host allows it. */
+export async function receiptPdf(t: CoreTables, settings: Settings, payment: Payment): Promise<File> {
+  const logo = await logoDataUri(receiptLogoUrl(settings));
+  return buildReceiptPdf(receiptHtml(t, settings, payment, logo), receiptFileName(payment));
+}
+
 /**
- * Receipt actions (PRD §6.5). The PDF is created in Drive on first use, so these call receipts.get.
- * Browsers only allow pop-ups and the share sheet straight after a tap, not after a slow request:
- * links open in a tab created before the request, and sharing uses a receipt fetched ahead (prepare).
+ * Receipt actions (PRD §6.5). The receipt and its PDF are made on this device from cached data, so
+ * opening and sharing need no server call. Only "Send link" needs a Drive copy: it is uploaded once
+ * (ahead of time from the payment sheet) and its link is kept in the Receipts table.
+ * Browsers only allow pop-ups and the share sheet straight after a tap: the WhatsApp tab is opened
+ * before any wait, and the PDF is usually ready before the tap.
  */
 export function useReceiptActions() {
   const tenant = useTenant();
@@ -65,45 +76,51 @@ export function useReceiptActions() {
   const logMessages = useLogMessages();
   const isDemo = tenant.apiUrl === 'mock';
 
-  async function fetchReceipt(paymentId: string, withFile = false) {
-    const res = await api<ReceiptResult>('receipts.get', { payment_id: paymentId, withFile });
-    if (res.changes) queryClient.setQueryData<CoreData>(coreKey(tenant.slug), (old) => (old ? applyChanges(old, res.changes) : old));
-    return res;
-  }
+  const versionKey = (payment: Payment) => `${tenant.slug}:${payment.id}:${payment.status}:${payment.receipt_no}:${payment.updated_at}`;
 
-  const preparedKey = (payment: Payment) => `${tenant.slug}:${payment.id}:${payment.status}`;
-
-  /** Starts fetching the receipt PDF so Share can open the share sheet instantly. */
-  function prepare(payment: Payment): PreparedReceipt {
-    const key = preparedKey(payment);
-    let entry = prepared.get(key);
+  function pdfEntry(payment: Payment): PreparedPdf {
+    const key = versionKey(payment);
+    let entry = pdfs.get(key);
     if (!entry) {
-      const created: PreparedReceipt = { promise: fetchReceipt(payment.id, true) };
+      const tables = data?.tables;
+      if (!tables) throw new Error('Data is still loading. Please retry.');
+      const created: PreparedPdf = { promise: receiptPdf(tables, data.settings, payment) };
       created.promise.then(
-        (res) => { created.result = res; },
-        () => { prepared.delete(key); },
+        (file) => { created.file = file; },
+        () => { pdfs.delete(key); },
       );
-      prepared.set(key, created);
+      pdfs.set(key, created);
       entry = created;
     }
     return entry;
   }
 
-  /** The receipt link, reusing a prepared receipt so one payment never creates two PDFs. */
-  function receiptFor(payment: Payment) {
-    return prepared.get(preparedKey(payment))?.promise ?? fetchReceipt(payment.id);
-  }
-
-  function link(paymentId: string, url: string) {
-    return isDemo ? `${window.location.origin}${tenantBasePath(tenant.slug)}/receipts/${paymentId}` : url;
+  /** The receipt's Drive link: from the Receipts table when uploaded already, else uploads this device's PDF. */
+  function linkFor(payment: Payment): Promise<string> {
+    if (isDemo) return Promise.resolve(`${window.location.origin}${tenantBasePath(tenant.slug)}/receipts/${payment.id}`);
+    const stored = data?.tables.Receipts.find((r) => r.payment_id === payment.id && r.status === receiptStatus(payment) && r.drive_url);
+    if (stored) return Promise.resolve(stored.drive_url);
+    const key = versionKey(payment);
+    let pending = links.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const pdf = await fileToBase64(await pdfEntry(payment).promise);
+        const res = await api<ReceiptResult>('receipts.get', { payment_id: payment.id, pdf });
+        if (res.changes) queryClient.setQueryData<CoreData>(coreKey(tenant.slug), (old) => (old ? applyChanges(old, res.changes) : old));
+        return res.url;
+      })();
+      pending.catch(() => links.delete(key));
+      links.set(key, pending);
+    }
+    return pending;
   }
 
   function message(payment: Payment, receiptLink: string) {
     const t = data?.tables;
     if (!t) return '';
-    const parent = t.Parents.find((p) => p.id === payment.parent_id);
+    const parent = byId(t.Parents).get(payment.parent_id);
     const lines = paymentLines(t, payment);
-    const balance = t.FeeDues.filter((d) => d.parent_id === payment.parent_id && isOpenDue(d)).reduce((s, d) => s + num(d.balance), 0);
+    const balance = (groupBy(t.FeeDues, 'parent_id').get(payment.parent_id) ?? []).filter(isOpenDue).reduce((s, d) => s + num(d.balance), 0);
     return fillMessage(templateText(t.MessageTemplates, 'Receipt'), {
       parent: parent?.guardian_name ?? '',
       student: [...new Set(lines.map((l) => l.student))].join(', '),
@@ -120,20 +137,20 @@ export function useReceiptActions() {
   async function sendWhatsApp(payment: Payment) {
     const tab = window.open('', '_blank');
     try {
-      const res = await receiptFor(payment);
+      const url = await linkFor(payment);
       const phone = data?.tables.Parents.find((p) => p.id === payment.parent_id)?.phone ?? '';
-      const text = message(payment, link(payment.id, res.url));
-      const url = whatsappUrl(phone, text);
+      const text = message(payment, url);
+      const wa = whatsappUrl(phone, text);
       logMessages([{ type: 'Receipt', parent_id: payment.parent_id, preview: text }]);
-      if (tab) tab.location.href = url;
-      else window.location.href = url;
+      if (tab) tab.location.href = wa;
+      else window.location.href = wa;
     } catch (err) {
       tab?.close();
       toast(errorMessage(err), 'error');
     }
   }
 
-  function download(file: File) {
+  function saveFile(file: File) {
     const url = URL.createObjectURL(file);
     const a = document.createElement('a');
     a.href = url;
@@ -145,33 +162,29 @@ export function useReceiptActions() {
   }
 
   /** Shares the PDF itself (no Drive link); where files cannot be shared, downloads it instead. */
-  async function shareNow(payment: Payment, res: ReceiptResult) {
-    if (!res.file) throw new Error('The receipt PDF could not be loaded. Please retry.');
-    const file = fileFrom(res.file);
+  async function shareNow(payment: Payment, file: File) {
     if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text: message(payment, ''), title: `Receipt ${res.receipt_no}` });
+      await navigator.share({ files: [file], text: message(payment, ''), title: `Receipt ${payment.receipt_no}` });
       return;
     }
-    download(file);
+    saveFile(file);
     toast('Receipt PDF downloaded. Attach it in WhatsApp to send.', 'success');
   }
 
   /**
-   * Shares the receipt as a PDF file. When the PDF was not ready at the tap, the browser refuses
-   * the share sheet; the PDF is then kept and the next tap shares it at once.
-   * The demo has no real PDF, so it sends the link on WhatsApp.
+   * Shares the receipt as a PDF file. The PDF takes well under a second on the device; should the
+   * browser still refuse the share sheet after the wait, the PDF is kept and the next tap shares it.
    */
   async function share(payment: Payment) {
-    if (isDemo) return sendWhatsApp(payment);
-    const entry = prepare(payment);
     try {
-      if (entry.result) {
-        await shareNow(payment, entry.result);
+      const entry = pdfEntry(payment);
+      if (entry.file) {
+        await shareNow(payment, entry.file);
         return;
       }
-      const res = await entry.promise;
+      const file = await entry.promise;
       try {
-        await shareNow(payment, res);
+        await shareNow(payment, file);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'NotAllowedError') {
           toast('Receipt is ready. Tap Share again to send it.', 'success');
@@ -185,28 +198,32 @@ export function useReceiptActions() {
     }
   }
 
-  async function open(payment: Payment) {
-    if (isDemo) {
-      navigate(`/receipts/${payment.id}`);
-      return;
-    }
-    const tab = window.open('', '_blank');
+  async function download(payment: Payment) {
     try {
-      const res = await receiptFor(payment);
-      if (tab) tab.location.href = res.url;
-      else window.location.href = res.url;
+      saveFile(await pdfEntry(payment).promise);
     } catch (err) {
-      tab?.close();
       toast(errorMessage(err), 'error');
     }
   }
 
-  /** Fetches the receipt PDF ahead of a likely Share tap. */
-  function warmUp(payment: Payment) {
-    if (!isDemo) prepare(payment);
+  async function open(payment: Payment) {
+    navigate(`/receipts/${payment.id}`);
   }
 
-  return { share, sendWhatsApp, open, warmUp };
+  /** Builds the PDF ahead of a likely Share tap, then uploads it so "Send link" is instant too. */
+  function warmUp(payment: Payment) {
+    const run = () => {
+      try {
+        pdfEntry(payment).promise.then(() => linkFor(payment)).catch(() => {});
+      } catch {
+        // data still loading: the tap builds it
+      }
+    };
+    if ('requestIdleCallback' in window) window.requestIdleCallback(run, { timeout: 1500 });
+    else setTimeout(run, 300);
+  }
+
+  return { share, sendWhatsApp, open, download, warmUp };
 }
 
 export interface FamilyReminder {
@@ -218,17 +235,18 @@ export interface FamilyReminder {
 
 /** WhatsApp fee reminder for a family's open dues; `template` defaults to the active FeeReminder template. */
 export function familyReminder(t: CoreTables, settings: Record<string, string>, academy: string, parentId: string, template?: string): FamilyReminder | null {
-  const parent = t.Parents.find((p) => p.id === parentId);
+  const parent = byId(t.Parents).get(parentId);
   if (!parent) return null;
-  const open = t.FeeDues.filter((d) => d.parent_id === parentId && isOpenDue(d)).sort(byDueOrder);
+  const open = (groupBy(t.FeeDues, 'parent_id').get(parentId) ?? []).filter(isOpenDue).sort(byDueOrder);
   if (!open.length) return null;
+  const students = byId(t.Students);
   const titles = open.map((d) => dueTitle(t, d));
-  const students = [...new Set(open.map((d) => t.Students.find((s) => s.id === d.student_id)?.name).filter(Boolean))];
+  const names = [...new Set(open.map((d) => students.get(d.student_id)?.name).filter(Boolean))];
   const months = [...new Set(titles.map((x) => x.period).filter(Boolean))];
   const balance = open.reduce((s, d) => s + num(d.balance), 0);
   const text = fillMessage(template ?? templateText(t.MessageTemplates, 'FeeReminder'), {
     parent: parent.guardian_name,
-    student: students.join(', '),
+    student: names.join(', '),
     course: [...new Set(titles.map((x) => x.title))].join(', '),
     month: months.join(', ') || monthLabel(todayIso().slice(0, 7)),
     amount: amountText(balance),

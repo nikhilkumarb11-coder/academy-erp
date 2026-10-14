@@ -3,7 +3,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createApiClient, type ApiCall } from '../api/client';
 import { useTenant } from '../tenant/TenantContext';
 import { clearSession, readSession, writeSession } from './session';
-import type { Session } from '../data/types';
+import { fromSnapshot } from '../data/merge';
+import { carryPending } from '../data/pending';
+import type { CoreData, CoreSnapshot, Session } from '../data/types';
+import { coreKey } from '../data/useCoreData';
 
 interface AuthState {
   session: Session | null;
@@ -57,10 +60,15 @@ export function AuthProvider({ children, onLogout }: { children: ReactNode; onLo
 
   const login = useCallback(
     async (password: string) => {
-      const next = await api<Session>('auth.login', { password });
+      // The server returns the bootstrap data with the token, so the first screen needs no second call.
+      const { data, ...next } = await api<Session & { data?: CoreSnapshot }>('auth.login', { password, withData: true });
+      if (data) {
+        const key = coreKey(tenant.slug);
+        queryClient.setQueryData(key, carryPending(queryClient.getQueryData<CoreData>(key), fromSnapshot(data)));
+      }
       setSession(next);
     },
-    [api, setSession],
+    [api, setSession, queryClient, tenant.slug],
   );
 
   // Log out on the device when the token's own expiry passes, even if no request is made.

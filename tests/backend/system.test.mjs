@@ -185,3 +185,43 @@ describe('sync', () => {
     assert.equal(be.sheetRows('AuditLog').filter((r) => r.action === 'settings.update').length, 2);
   });
 });
+
+describe('login snapshot', () => {
+  const readsOf = (be, tabs) => tabs.reduce((n, tab) => n + be.state.spreadsheet.getSheetByName(tab).reads, 0);
+  const TABS = ['Courses', 'Students', 'FeeDues', 'Payments', '_meta'];
+
+  it('login can return the bootstrap data with the token', async () => {
+    const { be } = await seeded();
+    const res = await be.ok('auth.login', { password: 'correct-horse-1', withData: true });
+    assert.ok(res.token);
+    assert.ok(res.data.Courses.length > 0);
+    assert.ok(res.data.serverTime);
+    const plain = await be.ok('auth.login', { password: 'correct-horse-1' });
+    assert.equal(plain.data, undefined);
+  });
+
+  it('serves repeat bootstraps from the cache and never a stale one', async () => {
+    const { be, token } = await seeded();
+    const first = await be.ok('system.bootstrap', {}, token);
+    const before = readsOf(be, TABS);
+    const second = await be.ok('system.bootstrap', {}, token);
+    assert.equal(readsOf(be, TABS), before, 'no sheet (not even _meta) is read for a cached snapshot');
+    assert.deepEqual(second, first);
+
+    const plan = first.FeePlans.find((p) => p.frequency === 'Monthly');
+    const adm = await be.ok('admissions.create', {
+      parent: { guardian_name: 'Asha', phone: '9000000009' },
+      students: [{ name: 'Meera', enrollments: [{ course_id: first.Courses[0].id, fee_plan_id: plan.id }] }],
+    }, token);
+    const third = await be.ok('system.bootstrap', {}, token);
+    assert.ok(third.Students.some((s) => s.id === adm.student_ids[0]), 'a write in the same second still invalidates it');
+
+    const sheet = be.state.spreadsheet.getSheetByName('Students');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const nameCell = sheet.getRange(2, headers.indexOf('name') + 1);
+    nameCell.setValues([['Typed in sheet']]);
+    be.execution().onSheetEdit({ range: nameCell });
+    const fourth = await be.ok('system.bootstrap', {}, token);
+    assert.ok(fourth.Students.some((s) => s.name === 'Typed in sheet'));
+  });
+});

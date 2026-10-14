@@ -210,7 +210,10 @@ function services(state) {
       getScriptCache: () => ({
         get: (k) => (k in state.cache ? state.cache[k] : null),
         put: (k, v) => { state.cache[k] = String(v); },
+        getAll: (keys) => Object.fromEntries(keys.filter((k) => k in state.cache).map((k) => [k, state.cache[k]])),
+        putAll: (values) => { Object.keys(values).forEach((k) => { state.cache[k] = String(values[k]); }); },
         remove: (k) => { delete state.cache[k]; },
+        removeAll: (keys) => { keys.forEach((k) => { delete state.cache[k]; }); },
       }),
     },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
@@ -223,8 +226,9 @@ function services(state) {
       computeHmacSha256Signature: (value, key) => signed(createHmac('sha256', key).update(value, 'utf8').digest()),
       base64EncodeWebSafe: (v) => toBuffer(v).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: (s) => signed(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
-      newBlob: (bytes) => ({ getDataAsString: () => unsigned(bytes).toString('utf8') }),
+      newBlob: (bytes, _type, name) => fakeBlob(unsigned(bytes)).setName(name || ''),
       base64Encode: (v) => toBuffer(v).toString('base64'),
+      base64Decode: (s) => signed(Buffer.from(s, 'base64')),
     },
     ContentService: {
       MimeType: { JSON: 'application/json' },

@@ -7,13 +7,70 @@ const SystemApi = (() => {
     };
   }
 
-  /** Everything the client caches at login (PRD §8 performance). */
+  /**
+   * Everything the client caches at login (PRD §8 performance). The snapshot is kept in CacheService,
+   * keyed by the data revision, so repeat logins and full reloads skip reading 21 tabs. A cached
+   * snapshot keeps the serverTime it was read at, so the client's next sync still covers later edits.
+   */
   function bootstrap() {
     Migrate.ensureCurrent();
     ExpensesApi.runRecurringIfDue();
+    const key = snapshotKey();
+    const hit = cachedSnapshot(key);
+    if (hit) return hit;
     const data = { settings: Db.getMap('Settings'), serverTime: Util.nowIso() };
     BOOTSTRAP_TABS.forEach((tab) => { data[tab] = Db.all(tab); });
+    storeSnapshot(key, data);
     return data;
+  }
+
+  const SNAPSHOT_CHUNK = 30000; // characters; CacheService values are capped at 100 KB (UTF-8)
+  const SNAPSHOT_MAX_CHUNKS = 200;
+  const SNAPSHOT_TTL_S = 6 * 3600;
+
+  /** Changes whenever any cached tab or Settings is written: Db.saveStamps and onSheetEdit replace data_rev. */
+  function snapshotKey() {
+    let rev = Util.prop('data_rev');
+    if (!rev) {
+      rev = Util.newId('REV');
+      Util.setProp('data_rev', rev);
+    }
+    return `boot:${API_VERSION}:${rev}`;
+  }
+
+  function cachedSnapshot(key) {
+    const cache = CacheService.getScriptCache();
+    const count = Number(cache.get(key) || 0);
+    if (!count) return null;
+    const keys = Array.from({ length: count }, (_, i) => `${key}:${i}`);
+    const parts = cache.getAll(keys);
+    if (keys.some((k) => typeof parts[k] !== 'string')) return null;
+    try {
+      return JSON.parse(keys.map((k) => parts[k]).join(''));
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function storeSnapshot(key, data) {
+    const json = JSON.stringify(data);
+    const count = Math.ceil(json.length / SNAPSHOT_CHUNK);
+    if (count > SNAPSHOT_MAX_CHUNKS) return;
+    const values = {};
+    for (let i = 0; i < count; i++) values[`${key}:${i}`] = json.slice(i * SNAPSHOT_CHUNK, (i + 1) * SNAPSHOT_CHUNK);
+    try {
+      const cache = CacheService.getScriptCache();
+      const previous = cache.get('boot:last');
+      if (previous && previous !== key) {
+        const [oldKey, oldCount] = previous.split('#');
+        cache.removeAll([oldKey].concat(Array.from({ length: Number(oldCount) || 0 }, (_, i) => `${oldKey}:${i}`)));
+      }
+      cache.putAll(values, SNAPSHOT_TTL_S);
+      cache.put(key, String(count), SNAPSHOT_TTL_S);
+      cache.put('boot:last', `${key}#${count}`, SNAPSHOT_TTL_S);
+    } catch (e) {
+      console.warn('Could not cache the bootstrap snapshot', e && e.message);
+    }
   }
 
   /** Overlap that covers writes still in flight when the previous sync read the sheet. */

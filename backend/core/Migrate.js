@@ -21,6 +21,7 @@ const Migrate = (() => {
       runDataMigrations(report);
       addDefaultSettings(report);
       Db.setMapValues('_meta', { schema_signature: signature() });
+      Util.setProp('data_rev', Util.newId('REV')); // new columns: drop the cached login snapshot
       return report;
     });
   }
@@ -78,9 +79,17 @@ const Migrate = (() => {
     return Util.sha256Hex(JSON.stringify([SCHEMA, Object.keys(DEFAULT_SETTINGS), DATA_MIGRATIONS.length])).slice(0, 16);
   }
 
-  /** Runs the migration once after a deploy that changed the schema; a cheap no-op otherwise. */
+  /**
+   * Runs the migration once after a deploy that changed the schema; a cheap no-op otherwise.
+   * A confirmed signature is remembered in CacheService, so most requests never open _meta.
+   */
   function ensureCurrent() {
-    return Db.getMap('_meta').schema_signature === signature() ? null : run();
+    const sig = signature();
+    const cache = CacheService.getScriptCache();
+    if (cache.get('schema_signature') === sig) return null;
+    const report = Db.getMap('_meta').schema_signature === sig ? null : run();
+    cache.put('schema_signature', sig, 6 * 3600);
+    return report;
   }
 
   function currentVersion() {

@@ -1,6 +1,7 @@
 import { Eye, EyeOff, Lock } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { warmServer } from '../api/client';
 import { errorMessage } from '../api/errors';
 import { AppLogo } from '../components/AppLogo';
 import { InstallButton } from '../components/InstallApp';
@@ -14,6 +15,8 @@ export function LoginPage() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => warmServer(tenant.apiUrl), [tenant.apiUrl]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -52,7 +55,7 @@ export function LoginPage() {
                 autoComplete="current-password"
                 autoFocus
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); warmServer(tenant.apiUrl); }}
                 className="min-h-12 w-full rounded-xl border border-line bg-surface pl-9 pr-11 text-base outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
               />
               <button

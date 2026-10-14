@@ -276,7 +276,7 @@ export function PaymentDoneSheet({ paymentId, onClose }: { paymentId: string; on
         <Button variant="secondary" onClick={run('wa', receipt.sendWhatsApp)} disabled={saving} loading={busy === 'wa'}><MessageCircle className="size-4" aria-hidden /> Send link on WhatsApp</Button>
         <Button variant="ghost" onClick={run('open', receipt.open)} disabled={saving} loading={busy === 'open'}><ExternalLink className="size-4" aria-hidden /> View receipt</Button>
       </div>
-      <p className="mt-3 text-center text-xs text-muted">Share sends the receipt as a PDF file. It is prepared after the payment saves and can take a few seconds.</p>
+      <p className="mt-3 text-center text-xs text-muted">Share sends the receipt as a PDF file, made on this phone as soon as the payment saves.</p>
     </Sheet>
   );
 }

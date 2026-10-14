@@ -150,9 +150,34 @@ const ReceiptPdf = (() => {
     </body></html>`;
   }
 
+  const fileName = (payment) => `${String(payment.receipt_no).replace(/\//g, '-')}${payment.status === 'Cancelled' ? '-CANCELLED' : ''}.pdf`;
+
   function render(payment) {
-    return HtmlService.createHtmlOutput(html(payment)).getBlob().getAs('application/pdf')
-      .setName(`${String(payment.receipt_no).replace(/\//g, '-')}${payment.status === 'Cancelled' ? '-CANCELLED' : ''}.pdf`);
+    return HtmlService.createHtmlOutput(html(payment)).getBlob().getAs('application/pdf').setName(fileName(payment));
+  }
+
+  const MAX_UPLOAD_BASE64 = 4 * 1024 * 1024;
+
+  /** A receipt PDF made by the app (base64), checked to be a PDF of sensible size. */
+  function fromBase64(base64, payment) {
+    if (typeof base64 !== 'string' || base64.length > MAX_UPLOAD_BASE64) throw new AppError('VALIDATION', 'Receipt PDF is too large');
+    let bytes;
+    try {
+      bytes = Utilities.base64Decode(base64);
+    } catch (e) {
+      throw new AppError('VALIDATION', 'Receipt PDF could not be read');
+    }
+    const head = bytes.slice(0, 5).map((b) => String.fromCharCode((b + 256) % 256)).join('');
+    if (head !== '%PDF-') throw new AppError('VALIDATION', 'Receipt PDF could not be read');
+    return Utilities.newBlob(bytes, 'application/pdf', fileName(payment));
+  }
+
+  function trash(fileId) {
+    try {
+      DriveApp.getFileById(fileId).setTrashed(true);
+    } catch (e) {
+      console.warn('Could not remove a duplicate receipt', e && e.message);
+    }
   }
 
   function folder() {
@@ -184,5 +209,5 @@ const ReceiptPdf = (() => {
     return DriveApp.getFileById(fileId).getBlob();
   }
 
-  return { html, render, save, load };
+  return { html, render, fromBase64, save, load, trash };
 })();

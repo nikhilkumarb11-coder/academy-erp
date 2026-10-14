@@ -76,7 +76,13 @@ const Db = (() => {
     const now = Util.nowIso();
     const values = {};
     tabs.forEach((tab) => { values[`stamp:${tab}`] = now; delete touched[tab]; });
+    if (tabs.some(isCachedTab)) values.data_rev = Util.newId('REV');
     Util.setProps(values);
+  }
+
+  /** Tabs in the login snapshot; writing one replaces data_rev, which keys the cached snapshot. */
+  function isCachedTab(tab) {
+    return tab === 'Settings' || BOOTSTRAP_TABS.indexOf(tab) >= 0;
   }
 
   /** Last change time of a tab, or null when unknown. */

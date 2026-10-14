@@ -105,13 +105,6 @@ export function createMockTransport(slug: string, presetId: string, academyName:
   };
 }
 
-/** HTML of a receipt "uploaded" by the demo backend (its Drive URLs look like demo-receipt:<id>). */
-export function demoReceiptHtml(slug: string, url: string): string | null {
-  const saved = localStorage.getItem(storageKey(slug));
-  if (!saved || !url.startsWith('demo-receipt:')) return null;
-  return deserialize(saved).files[url.slice('demo-receipt:'.length)]?.html ?? null;
-}
-
 /** Clears the demo database and the device cache, then reloads so everything re-seeds. */
 export async function resetMockDb(slug: string) {
   localStorage.removeItem(storageKey(slug));

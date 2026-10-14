@@ -4,6 +4,7 @@
  */
 import type { CoreTables, FeeDue, Payment } from '../data/types';
 import { daysBetween } from './dates';
+import { byId } from './indexes';
 import { num } from './values';
 
 export const isOpenDue = (d: FeeDue) => num(d.balance) > 0 && d.status !== 'Paid' && d.status !== 'Waived';
@@ -34,8 +35,8 @@ export function creditOf(t: Pick<CoreTables, 'Payments' | 'PaymentAllocations'>,
 /** "Karate · Oct 2026" or the charge name. */
 export function dueTitle(t: Pick<CoreTables, 'Enrollments' | 'Courses'>, due: FeeDue): { title: string; period: string } {
   if (due.kind === 'OneTime') return { title: due.period_label, period: '' };
-  const enrollment = t.Enrollments.find((e) => e.id === due.enrollment_id);
-  const course = t.Courses.find((c) => c.id === enrollment?.course_id);
+  const enrollment = byId(t.Enrollments).get(due.enrollment_id);
+  const course = enrollment ? byId(t.Courses).get(enrollment.course_id) : undefined;
   return { title: course?.name ?? 'Course', period: due.period_label };
 }
 

@@ -62,7 +62,7 @@ function onSheetEdit(e) {
       target.setValues(ids.map((r, i) => [r[0] ? now : current[i][0]]));
     }
   }
-  Util.setProp(`stamp:${tab}`, now);
+  Util.setProps({ [`stamp:${tab}`]: now, data_rev: Util.newId('REV') });
 }
 
 /** Emergency reset from the editor: set INITIAL_PASSWORD, run this, and every device is logged out. */
