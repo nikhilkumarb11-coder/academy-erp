@@ -244,7 +244,7 @@ export function AdmissionPage() {
 
   return (
     <form onSubmit={submit} className="pb-24 lg:pb-0">
-      <PageHeader title="New admission" subtitle={`Add a ${labels.guardian.toLowerCase()} with one or more children`} />
+      <PageHeader title="New admission" subtitle={`${labels.student} details, then ${labels.guardian.toLowerCase()}, then ${labels.courses.toLowerCase()} and fees`} />
 
       {enquiry && (
         <div className="mb-4">
@@ -252,8 +252,36 @@ export function AdmissionPage() {
         </div>
       )}
 
+      {children.map((child, i) => (
+        <Card key={child.key} className="mb-4">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{children.length > 1 ? `${labels.student} ${i + 1}` : `${labels.student} details`}</h2>
+            {children.length > 1 && (
+              <Button type="button" variant="ghost" className="min-h-9 px-2 text-danger" onClick={() => setChildren((list) => list.filter((c) => c.key !== child.key))} aria-label={`Remove ${labels.student.toLowerCase()} ${i + 1}`}>
+                <X className="size-4" aria-hidden /> Remove
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label={`${labels.student} name`} autoComplete="off" value={child.name} onChange={(e) => updateChild(child.key, { name: e.target.value })} error={childErr(i, 'name')} className="sm:col-span-2" />
+            <Field label={`${labels.class} (optional)`} value={child.class} onChange={(e) => updateChild(child.key, { class: e.target.value })} error={childErr(i, 'class')} />
+            <CustomFieldInputs
+              entity="Student"
+              values={child.extra}
+              onChange={(key, value) => updateChild(child.key, { extra: { ...child.extra, [key]: value } })}
+              errorFor={(key) => childErr(i, `extra.${key}`)}
+            />
+            <Field label="Date of birth (optional)" type="date" value={child.dob} onChange={(e) => updateChild(child.key, { dob: e.target.value })} error={childErr(i, 'dob')} />
+          </div>
+        </Card>
+      ))}
+
+      <Button type="button" variant="secondary" className="mb-4 w-full sm:w-auto" onClick={() => setChildren((list) => [...list, emptyChild()])}>
+        <Plus className="size-4" aria-hidden /> Add sibling
+      </Button>
+
       <Card className="mb-4">
-        <h2 className="mb-4 text-lg font-semibold">{labels.guardian}</h2>
+        <h2 className="mb-4 text-lg font-semibold">{labels.guardian} details</h2>
         {existingParent ? (
           <ExistingParent parent={existingParent} onChange={() => setExistingParentId(null)} />
         ) : (
@@ -305,27 +333,12 @@ export function AdmissionPage() {
 
       {children.map((child, i) => (
         <Card key={child.key} className="mb-4">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-lg font-semibold">{children.length > 1 ? `Child ${i + 1}` : 'Child'}</h2>
-            {children.length > 1 && (
-              <Button type="button" variant="ghost" className="min-h-9 px-2 text-danger" onClick={() => setChildren((list) => list.filter((c) => c.key !== child.key))} aria-label={`Remove child ${i + 1}`}>
-                <X className="size-4" aria-hidden /> Remove
-              </Button>
-            )}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label={`${labels.student} name`} autoComplete="off" value={child.name} onChange={(e) => updateChild(child.key, { name: e.target.value })} error={childErr(i, 'name')} className="sm:col-span-2" />
-            <Field label={`${labels.class} (optional)`} value={child.class} onChange={(e) => updateChild(child.key, { class: e.target.value })} error={childErr(i, 'class')} />
-            <CustomFieldInputs
-              entity="Student"
-              values={child.extra}
-              onChange={(key, value) => updateChild(child.key, { extra: { ...child.extra, [key]: value } })}
-              errorFor={(key) => childErr(i, `extra.${key}`)}
-            />
-            <Field label="Date of birth (optional)" type="date" value={child.dob} onChange={(e) => updateChild(child.key, { dob: e.target.value })} error={childErr(i, 'dob')} />
-          </div>
+          <h2 className="text-lg font-semibold">
+            {labels.courses} & fees
+            {children.length > 1 && <span className="font-normal text-muted"> · {child.name.trim() || `${labels.student} ${i + 1}`}</span>}
+          </h2>
 
-          <h3 className="mb-2 mt-5 text-sm font-semibold uppercase tracking-wide text-muted">{labels.courses}</h3>
+          <h3 className="mb-2 mt-4 text-sm font-semibold uppercase tracking-wide text-muted">{labels.courses}</h3>
           {courseGroups.length === 0 ? (
             <p className="text-sm text-muted">No active {labels.courses.toLowerCase()}. Add some in the {labels.course.toLowerCase()} master first.</p>
           ) : (
@@ -404,10 +417,6 @@ export function AdmissionPage() {
           )}
         </Card>
       ))}
-
-      <Button type="button" variant="secondary" className="mb-4 w-full sm:w-auto" onClick={() => setChildren((list) => [...list, emptyChild()])}>
-        <Plus className="size-4" aria-hidden /> Add sibling
-      </Button>
 
       {!!err && !shownInline && (
         <div className="mb-4">

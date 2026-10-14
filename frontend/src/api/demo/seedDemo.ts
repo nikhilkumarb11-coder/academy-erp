@@ -122,7 +122,7 @@ export function seedDemo(call: Call, opts: { preset: { id: string }; academyName
         date: iso(day),
         marks: roster.map((e) => {
           const r = rnd();
-          return { student_id: e.student_id, status: r < 0.85 ? 'Present' : r < 0.95 ? 'Absent' : 'Leave' };
+          return { student_id: e.student_id, status: r < 0.88 ? 'Present' : 'Absent' };
         }),
       });
     }

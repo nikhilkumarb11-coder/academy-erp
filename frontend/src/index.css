@@ -61,6 +61,28 @@
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
+
+  .report-print .print-stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .report-print .print-stack > * {
+    grid-column: auto;
+  }
+}
+
+/* A4 width less the page margins, so charts are drawn at the size they print at. */
+html.printing .report-print {
+  width: 180mm;
+  max-width: none;
+}
+
+html.printing .report-print .print-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html.printing .report-print .print-stack > * {
+  grid-column: auto;
 }
 
 @utility pb-safe {

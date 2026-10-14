@@ -28,7 +28,7 @@ export function ReportsPage() {
 
   if (isPending || !data) return <Spinner />;
   return (
-    <>
+    <div className="report-print">
       <div className="print:hidden">
         <PageHeader title="Reports" subtitle="Income, expenses and what the academy owns" />
       </div>
@@ -44,22 +44,39 @@ export function ReportsPage() {
           </button>
         ))}
       </div>
-      {tab === 'overview' && <ReportsOverview data={data} />}
+      {tab === 'overview' && (
+        <>
+          <ExportButtons className="mb-3 justify-end" />
+          <ReportsOverview data={data} />
+        </>
+      )}
       {tab === 'pl' && <ProfitLoss data={data} />}
       {tab === 'cash' && <CashFlow data={data} />}
       {tab === 'balance' && <Balance data={data} />}
-    </>
+    </div>
   );
 }
 
 const fyStart = (data: CoreData) => num(data.settings.fy_start_month, 4) || 4;
 
+/**
+ * Charts size themselves to their box in JavaScript, which the print engine never runs. So the report is first
+ * laid out at the printed page width (`html.printing` in index.css), the charts redraw, and then the dialog opens.
+ */
+function printReport() {
+  const root = document.documentElement;
+  root.classList.add('printing');
+  const done = () => { root.classList.remove('printing'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => window.print(), 400);
+}
+
 /** "PDF" opens the print dialog; the app chrome is hidden in print, so "Save as PDF" gives a clean report. */
-function ExportButtons({ onCsv, className }: { onCsv: () => void; className?: string }) {
+function ExportButtons({ onCsv, className }: { onCsv?: () => void; className?: string }) {
   return (
     <div className={clsx('flex gap-2 print:hidden', className)}>
-      <Button variant="ghost" onClick={onCsv}><Download className="size-4" aria-hidden /> CSV</Button>
-      <Button variant="ghost" onClick={() => window.print()}><Printer className="size-4" aria-hidden /> PDF</Button>
+      {onCsv && <Button variant="ghost" onClick={onCsv}><Download className="size-4" aria-hidden /> CSV</Button>}
+      <Button variant="ghost" onClick={printReport}><Printer className="size-4" aria-hidden /> PDF</Button>
     </div>
   );
 }
@@ -148,7 +165,7 @@ function ProfitLoss({ data }: { data: CoreData }) {
         <ResultRow label={pl.net >= 0 ? 'Net profit' : 'Net loss'} value={pl.net} hint={pl.net > 0 && pl.incomeTotal ? `${margin}% of income kept as profit` : undefined} />
       </Card>
       {(pl.incomeTotal > 0 || pl.expenseTotal > 0) && (
-        <div className="grid gap-4 lg:grid-cols-2 print:hidden">
+        <div className="print-stack grid gap-4 lg:grid-cols-2">
           <ChartCard title="Where income came from" subtitle={period.label}>
             <Donut data={pl.income.map((l) => ({ name: l.label, value: l.amount }))} totalLabel="income" />
           </ChartCard>
@@ -185,7 +202,7 @@ function CashFlow({ data }: { data: CoreData }) {
         <Stepper label={fy.label} onPrev={() => setFyOffset((o) => o - 1)} onNext={() => setFyOffset((o) => o + 1)} nextDisabled={fyOffset >= 0} />
         <ExportButtons className="ml-auto" onCsv={exportCsv} />
       </div>
-      <Card className="print:hidden">
+      <Card className="print:break-inside-avoid">
         <InOutChart data={rows.map((r) => ({ label: monthLabel(r.month).slice(0, 3), inflow: r.inflow, outflow: r.outflow, net: r.net }))} />
       </Card>
       <Card className="!p-0">

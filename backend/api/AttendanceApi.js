@@ -1,7 +1,7 @@
 /**
  * Course-wise attendance and holidays (PRD §6.2).
  * Attendance is not cached on devices (it grows fastest); the roster itself comes from cached
- * enrollments, so the app only asks the server for the marks of one course and day.
+ * enrollments, so the app only asks the server for the marks of one day.
  */
 const AttendanceApi = (() => {
   function requireCourse(id) {
@@ -10,11 +10,10 @@ const AttendanceApi = (() => {
     return course;
   }
 
-  /** attendance.day { course_id, date } -> { marks } */
+  /** attendance.day { course_id?, date } -> { marks } (every course when course_id is empty) */
   function day(payload) {
-    Util.requireFields(payload, ['course_id', 'date']);
     const date = Validate.date(payload.date, 'date', { required: true, label: 'Date' });
-    return { marks: Db.all('Attendance').filter((a) => a.course_id === payload.course_id && a.date === date && a.status) };
+    return { marks: Db.all('Attendance').filter((a) => (!payload.course_id || a.course_id === payload.course_id) && a.date === date && a.status) };
   }
 
   /**

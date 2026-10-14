@@ -100,7 +100,6 @@ export function DashboardPage() {
     return {
       present: todays.filter((r) => r.status === 'Present').length,
       absent: todays.filter((r) => r.status === 'Absent').length,
-      leave: todays.filter((r) => r.status === 'Leave').length,
       low: [...perStudent.entries()].filter(([id, s]) => active.has(id) && s.total >= MIN_MARKS && s.present / s.total < LOW_ATTENDANCE).length,
     };
   }, [attendance.data, data, today]);
@@ -110,7 +109,7 @@ export function DashboardPage() {
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const marked = att ? att.present + att.absent + att.leave : 0;
+  const marked = att ? att.present + att.absent : 0;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   const attention: Attention[] = [
@@ -141,7 +140,7 @@ export function DashboardPage() {
         {showAttendance && (
           <Tile to="/attendance" icon={CalendarCheck} label="Today's attendance"
             value={!att ? '…' : marked ? `${att.present}/${marked}` : '—'}
-            hint={!att ? (attendance.isError ? 'Could not load' : 'Loading') : marked ? `${att.absent} absent${att.leave ? ` · ${att.leave} on leave` : ''}` : 'Not marked yet'} />
+            hint={!att ? (attendance.isError ? 'Could not load' : 'Loading') : marked ? `${att.absent} absent` : 'Not marked yet'} />
         )}
         <Tile to="/courses" icon={BookOpen} label={labels.courses} value={stats.courses} hint={stats.topCourse ? `Most joined: ${stats.topCourse.name}` : undefined} />
       </div>

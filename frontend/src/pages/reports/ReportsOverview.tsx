@@ -95,7 +95,7 @@ export function ReportsOverview({ data }: { data: CoreData }) {
         <InOutChart data={view.flow} />
       </ChartCard>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="print-stack grid gap-4 lg:grid-cols-2">
         <ChartCard title="How families pay" subtitle="Last 12 months">
           <Donut data={view.modes} totalLabel="received" />
         </ChartCard>

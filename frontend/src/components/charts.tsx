@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useMemo, type ReactNode } from 'react';
 import {
   Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -37,13 +38,13 @@ export function useCompactMoney() {
 
 export function ChartCard({ title, subtitle, action, children, className }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <Card className={className}>
+    <Card className={clsx('print:break-inside-avoid', className)}>
       <div className="mb-3 flex items-start justify-between gap-2">
         <div>
           <h2 className="font-semibold">{title}</h2>
           {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
-        {action}
+        {action && <div className="print:hidden">{action}</div>}
       </div>
       {children}
     </Card>

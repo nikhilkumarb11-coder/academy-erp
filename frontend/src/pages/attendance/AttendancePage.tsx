@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { CalendarOff, CheckCheck, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { useAuth } from '../../auth/AuthContext';
 import { errorMessage } from '../../api/errors';
@@ -13,6 +13,7 @@ import { activeCourses, attendanceDayQuery, attendanceMonthQuery, defaultAttenda
 import type { AttendanceMark, AttendanceStatus, CoreTables, Holiday } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
 import { useLogMessages } from '../../data/useMessages';
+import { beginSave, endSave } from '../../data/pending';
 import { useWrite } from '../../data/useWrite';
 import { addDaysIso, addMonths, formatDate, monthLabel, todayIso, weekdayShort } from '../../lib/dates';
 import { bool, isDeleted } from '../../lib/values';
@@ -23,8 +24,8 @@ type Mark = AttendanceStatus | '';
 const STATES: { status: AttendanceStatus; short: string; on: string }[] = [
   { status: 'Present', short: 'P', on: 'border-success bg-success text-white' },
   { status: 'Absent', short: 'A', on: 'border-danger bg-danger text-white' },
-  { status: 'Leave', short: 'L', on: 'border-warning bg-warning text-white' },
 ];
+type DayMarks = { marks: AttendanceMark[] };
 /** Students enrolled in a course on a date (active, started, not ended), optionally one batch. */
 function rosterFor(t: CoreTables, courseId: string, batchId: string, date: string) {
   const students = new Map(t.Students.map((s) => [s.id, s]));
@@ -81,7 +82,6 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
   const batchId = params.get('batch') ?? '';
   const date = params.get('date') ?? today;
   const [edits, setEdits] = useState<{ key: string; marks: Record<string, Mark> }>({ key: '', marks: {} });
-  const [saving, setSaving] = useState(false);
   const [absentees, setAbsentees] = useState<string[] | null>(null);
   const [holidaySheet, setHolidaySheet] = useState(false);
   const deleteHoliday = useWrite('holidays.delete');
@@ -94,9 +94,13 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
       return p;
     }, { replace: true });
 
-  const marksOptions = attendanceDayQuery(api, tenant.slug, courseId, date);
+  const marksOptions = attendanceDayQuery(api, tenant.slug, date);
   const marksKey = marksOptions.queryKey;
   const marksQuery = useQuery(marksOptions);
+  const loaded = !!marksQuery.data;
+  useEffect(() => {
+    if (loaded) queryClient.prefetchQuery(attendanceDayQuery(api, tenant.slug, addDaysIso(date, -1))).catch(() => {});
+  }, [loaded, api, tenant.slug, date, queryClient]);
 
   const course = courses.find((c) => c.id === courseId);
   const batches = t.Batches.filter((b) => b.course_id === courseId && bool(b.active) && !isDeleted(b));
@@ -105,10 +109,12 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
 
   const key = `${courseId}|${date}`;
   const myEdits = edits.key === key ? edits.marks : {};
-  const server = useMemo(() => new Map((marksQuery.data?.marks ?? []).map((m) => [m.student_id, m.status as Mark])), [marksQuery.data]);
+  const server = useMemo(() => new Map((marksQuery.data?.marks ?? [])
+    .filter((m) => m.course_id === courseId && (m.status === 'Present' || m.status === 'Absent'))
+    .map((m) => [m.student_id, m.status as Mark])), [marksQuery.data, courseId]);
   const markOf = (studentId: string): Mark => (studentId in myEdits ? myEdits[studentId] : server.get(studentId) ?? '');
   const changed = Object.entries(myEdits).filter(([id, m]) => (server.get(id) ?? '') !== m);
-  const counts = roster.reduce((acc, r) => { acc[markOf(r.student.id) || 'none'] += 1; return acc; }, { Present: 0, Absent: 0, Leave: 0, none: 0 } as Record<AttendanceStatus | 'none', number>);
+  const counts = roster.reduce((acc, r) => { const m = markOf(r.student.id); if (m === 'Present' || m === 'Absent') acc[m] += 1; else acc.none += 1; return acc; }, { Present: 0, Absent: 0, none: 0 });
 
   function setMark(studentId: string, m: Mark) {
     setEdits((e) => ({ key, marks: { ...(e.key === key ? e.marks : {}), [studentId]: m } }));
@@ -122,25 +128,41 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
     });
   }
 
+  /** Shows the marks as saved straight away; the server confirms in the background. */
   async function save() {
-    setSaving(true);
+    const sent = changed;
+    void queryClient.cancelQueries({ queryKey: marksKey });
+    const previous = queryClient.getQueryData<DayMarks>(marksKey);
+    const withCourse = (data: DayMarks | undefined, courseMarks: AttendanceMark[]): DayMarks => ({
+      marks: [...(data?.marks ?? []).filter((m) => m.course_id !== courseId), ...courseMarks],
+    });
+    const local = new Map((previous?.marks ?? []).filter((m) => m.course_id === courseId).map((m) => [m.student_id, m]));
+    sent.forEach(([student_id, status]) => {
+      if (status) local.set(student_id, { ...(local.get(student_id) ?? { id: '', date, course_id: courseId, batch_id: batchId, student_id, remarks: '' }), status } as AttendanceMark);
+      else local.delete(student_id);
+    });
+    queryClient.setQueryData<DayMarks>(marksKey, (d) => withCourse(d, [...local.values()]));
+    localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, courseId);
+    const newlyAbsent = sent.filter(([, m]) => m === 'Absent').map(([id]) => id);
+    setEdits({ key: '', marks: {} });
+    toast(`Saved: ${counts.Present} present, ${counts.Absent} absent`);
+    if (newlyAbsent.length) setAbsentees(newlyAbsent);
+
+    beginSave([]);
     try {
-      const res = await api<{ marks: AttendanceMark[] }>('attendance.save', {
+      const res = await api<DayMarks>('attendance.save', {
         course_id: courseId,
         batch_id: batchId,
         date,
-        marks: changed.map(([student_id, status]) => ({ student_id, status })),
+        marks: sent.map(([student_id, status]) => ({ student_id, status })),
       });
-      queryClient.setQueryData(marksKey, res);
-      localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, courseId);
-      const newlyAbsent = changed.filter(([, m]) => m === 'Absent').map(([id]) => id);
-      setEdits({ key: '', marks: {} });
-      toast(`Saved: ${counts.Present} present, ${counts.Absent} absent`);
-      if (newlyAbsent.length) setAbsentees(newlyAbsent);
+      queryClient.setQueryData<DayMarks>(marksKey, (d) => withCourse(d, res.marks));
     } catch (err) {
-      toast(errorMessage(err), 'error');
+      queryClient.setQueryData<DayMarks>(marksKey, (d) => withCourse(d, (previous?.marks ?? []).filter((m) => m.course_id === courseId)));
+      setEdits((e) => ({ key, marks: { ...Object.fromEntries(sent), ...(e.key === key ? e.marks : {}) } }));
+      toast(`Attendance not saved: ${errorMessage(err)}`, 'error');
     } finally {
-      setSaving(false);
+      endSave([]);
     }
   }
 
@@ -200,18 +222,18 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted">
             {roster.length} {roster.length === 1 ? labels.student.toLowerCase() : labels.students.toLowerCase()}
-            {roster.length > 0 && ` · ${counts.Present} P · ${counts.Absent} A · ${counts.Leave} L${counts.none ? ` · ${counts.none} not marked` : ''}`}
+            {roster.length > 0 && (loaded
+              ? ` · ${counts.Present} P · ${counts.Absent} A${counts.none ? ` · ${counts.none} not marked` : ''}`
+              : marksQuery.isError ? '' : ' · loading saved marks…')}
           </p>
           <div className="flex gap-2">
             <Button variant="ghost" className="min-h-9 px-2.5" onClick={() => setHolidaySheet(true)}><CalendarOff className="size-4" aria-hidden /> Holiday</Button>
-            {roster.length > 0 && counts.none > 0 && <Button variant="secondary" className="min-h-9" onClick={markAllPresent}><CheckCheck className="size-4" aria-hidden /> All present</Button>}
+            {loaded && roster.length > 0 && counts.none > 0 && <Button variant="secondary" className="min-h-9" onClick={markAllPresent}><CheckCheck className="size-4" aria-hidden /> All present</Button>}
           </div>
         </div>
       )}
 
-      {marksQuery.isPending ? (
-        <Spinner label="Loading marks…" />
-      ) : marksQuery.isError ? (
+      {marksQuery.isError && !loaded ? (
         <Alert>{errorMessage(marksQuery.error)} <button type="button" className="underline" onClick={() => marksQuery.refetch()}>Retry</button></Alert>
       ) : roster.length === 0 ? (
         <Card><EmptyState title={`No ${labels.students.toLowerCase()} in this ${labels.course.toLowerCase()}`}>Only active enrolments that started on or before this date are listed.</EmptyState></Card>
@@ -244,7 +266,7 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
           <div className="mx-auto flex max-w-3xl items-center gap-3">
             <p className="flex-1 text-sm text-muted">{changed.length} change{changed.length === 1 ? '' : 's'}</p>
             <Button variant="ghost" onClick={() => setEdits({ key: '', marks: {} })}>Undo</Button>
-            <Button loading={saving} onClick={save}>Save attendance</Button>
+            <Button disabled={!loaded} onClick={save}>{loaded ? 'Save attendance' : 'Loading…'}</Button>
           </div>
         </div>
       )}
@@ -313,12 +335,12 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
   const report = useQuery(attendanceMonthQuery(api, tenant.slug, month, courseId));
 
   const rows = useMemo(() => {
-    const marks = report.data?.rows ?? [];
+    const marks = (report.data?.rows ?? []).filter((m) => m.status === 'Present' || m.status === 'Absent');
     const days = new Set(marks.map((m) => m.date)).size;
-    const byStudent = new Map<string, Record<AttendanceStatus, number>>();
+    const byStudent = new Map<string, { Present: number; Absent: number }>();
     marks.forEach((m) => {
-      const c = byStudent.get(m.student_id) ?? { Present: 0, Absent: 0, Leave: 0 };
-      c[m.status] += 1;
+      const c = byStudent.get(m.student_id) ?? { Present: 0, Absent: 0 };
+      c[m.status as 'Present' | 'Absent'] += 1;
       byStudent.set(m.student_id, c);
     });
     const enrolled = new Set(t.Enrollments.filter((e) => e.course_id === courseId && e.status !== 'Dropped').map((e) => e.student_id));
@@ -326,8 +348,8 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
     return {
       days,
       list: [...ids].map((id) => {
-        const c = byStudent.get(id) ?? { Present: 0, Absent: 0, Leave: 0 };
-        const marked = c.Present + c.Absent + c.Leave;
+        const c = byStudent.get(id) ?? { Present: 0, Absent: 0 };
+        const marked = c.Present + c.Absent;
         return { id, name: t.Students.find((s) => s.id === id)?.name ?? '?', ...c, pct: marked ? Math.round((c.Present / marked) * 100) : null };
       }).sort((a, b) => (a.pct ?? 101) - (b.pct ?? 101) || a.name.localeCompare(b.name)),
     };
@@ -359,7 +381,6 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
                   <th className="px-3 py-2.5 font-medium sm:px-4">{labels.student}</th>
                   <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">P</th>
                   <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">A</th>
-                  <th className="px-1.5 py-2.5 text-center font-medium sm:px-2">L</th>
                   <th className="px-3 py-2.5 text-right font-medium sm:px-4">%</th>
                 </tr>
               </thead>
@@ -369,7 +390,6 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
                     <td className="px-3 py-2.5 font-medium sm:px-4">{r.name}</td>
                     <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Present}</td>
                     <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Absent}</td>
-                    <td className="px-1.5 py-2.5 text-center tabular-nums sm:px-2">{r.Leave}</td>
                     <td className={clsx('px-3 py-2.5 text-right font-semibold tabular-nums sm:px-4', r.pct !== null && r.pct < 75 && 'text-danger')}>{r.pct === null ? '—' : `${r.pct}%`}</td>
                   </tr>
                 ))}

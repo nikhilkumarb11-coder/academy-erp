@@ -87,9 +87,8 @@ function AttendanceSummary({ studentId }: { studentId: string }) {
   });
   if (!enabled) return null;
 
-  const rows = report.data?.rows ?? [];
-  const count = (s: string) => rows.filter((r) => r.status === s).length;
-  const present = count('Present');
+  const rows = (report.data?.rows ?? []).filter((r) => r.status === 'Present' || r.status === 'Absent');
+  const present = rows.filter((r) => r.status === 'Present').length;
   const pct = rows.length ? Math.round((present / rows.length) * 100) : null;
   const recentAbsences = rows.filter((r) => r.status === 'Absent').map((r) => r.date).sort().reverse().slice(0, 3);
 
@@ -110,7 +109,7 @@ function AttendanceSummary({ studentId }: { studentId: string }) {
         <p className="mt-2 text-sm text-muted">Not marked yet this month.</p>
       ) : (
         <>
-          <p className="mt-2 text-sm">{present} present · {count('Absent')} absent · {count('Leave')} leave</p>
+          <p className="mt-2 text-sm">{present} present · {rows.length - present} absent</p>
           {recentAbsences.length > 0 && <p className="mt-1 text-xs text-muted">Absent on {recentAbsences.map(formatDate).join(', ')}</p>}
         </>
       )}

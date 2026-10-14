@@ -288,6 +288,10 @@ describe('attendance', () => {
 
     const day = await f.be.ok('attendance.day', { course_id, date: '2026-10-13' }, f.token);
     assert.equal(day.marks.length, 2);
+    const whole = await f.be.ok('attendance.day', { date: '2026-10-13' }, f.token);
+    assert.equal(whole.marks.length, 2, 'every course when no course is given');
+    const other = await f.be.ok('attendance.day', { course_id: 'CRS-none', date: '2026-10-13' }, f.token);
+    assert.equal(other.marks.length, 0);
     const report = await f.be.ok('attendance.report', { month: '2026-10', student_id: f.aarav }, f.token);
     assert.equal(report.rows.length, 1);
 

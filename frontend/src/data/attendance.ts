@@ -15,10 +15,11 @@ export function defaultAttendanceCourse(t: CoreTables, slug: string): string {
   return courses.some((c) => c.id === saved) ? saved : courses[0]?.id ?? '';
 }
 
-export function attendanceDayQuery(api: ApiCall, slug: string, courseId: string, date: string) {
+/** Every course's marks for one day, so switching course on the Attendance screen needs no server call. */
+export function attendanceDayQuery(api: ApiCall, slug: string, date: string) {
   return {
-    queryKey: ['attendance', slug, courseId, date] as const,
-    queryFn: () => api<{ marks: AttendanceMark[] }>('attendance.day', { course_id: courseId, date }),
+    queryKey: ['attendance', slug, 'day', date] as const,
+    queryFn: () => api<{ marks: AttendanceMark[] }>('attendance.day', { date }),
     staleTime: 30_000,
   };
 }
