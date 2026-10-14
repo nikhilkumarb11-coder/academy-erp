@@ -13,7 +13,7 @@ describe('whatsapp', () => {
   it('uses the active template of a type, else the built-in one', () => {
     const list = [template('Receipt', 'old', false), template('Receipt', 'Thanks {parent}')];
     expect(templateText(list, 'Receipt')).toBe('Thanks {parent}');
-    expect(templateText([], 'Absent')).toContain('{student}');
+    expect(templateText([], 'FeeReminder')).toContain('{student}');
   });
 
   it('drops the payment link sentence until online payments exist', () => {

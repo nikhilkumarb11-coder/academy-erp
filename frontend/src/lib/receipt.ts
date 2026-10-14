@@ -24,7 +24,7 @@ function formatDate(iso: string) {
   return d && m && y ? `${d}/${m}/${y}` : String(iso);
 }
 
-const color = (value: unknown, fallback: string) => (/^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? String(value).trim() : fallback);
+export const brandColor = (value: unknown, fallback: string) => (/^#[0-9a-f]{6}$/i.test(String(value || '').trim()) ? String(value).trim() : fallback);
 
 export function receiptFileName(payment: Payment) {
   return `${String(payment.receipt_no || payment.id).replace(/\//g, '-')}${payment.status === 'Cancelled' ? '-CANCELLED' : ''}.pdf`;
@@ -66,8 +66,8 @@ export function receiptHtml(t: CoreTables, settings: Settings, payment: Payment,
   const { parent, lines, advance, outstanding } = receiptData(t, payment);
   const cancelled = payment.status === 'Cancelled';
   const name = settings.academy_name || 'Academy';
-  const primary = color(settings.brand_primary, '#0B1F3A');
-  const accent = color(settings.brand_accent, '#C9A227');
+  const primary = brandColor(settings.brand_primary, '#0B1F3A');
+  const accent = brandColor(settings.brand_accent, '#C9A227');
   const contactLine = [settings.contact_person, settings.academy_phone].filter(Boolean).join(' · ');
   const m = (n: number) => money(n, settings);
   const rows = lines.map((l) => `

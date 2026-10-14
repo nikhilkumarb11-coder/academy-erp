@@ -31,7 +31,7 @@ const SAMPLE: Record<string, string> = {
 export function TemplatesSettings() {
   const { data } = useCoreData();
   const [editing, setEditing] = useState<Partial<MessageTemplate> | null>(null);
-  const templates = [...(data?.tables.MessageTemplates ?? [])].sort((a, b) =>
+  const templates = (data?.tables.MessageTemplates ?? []).filter((x) => TEMPLATE_TYPES.some((k) => k.type === x.type)).sort((a, b) =>
     TEMPLATE_TYPES.findIndex((x) => x.type === a.type) - TEMPLATE_TYPES.findIndex((x) => x.type === b.type) || a.name.localeCompare(b.name));
 
   return (

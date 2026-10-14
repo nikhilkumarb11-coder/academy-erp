@@ -4,7 +4,8 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ChartCard, Donut, InOutChart } from '../../components/charts';
 import { Button, Card, PageHeader, Spinner } from '../../components/ui';
-import type { CoreData } from '../../data/types';
+import type { CoreData, Settings } from '../../data/types';
+import { brandColor, receiptLogoUrl } from '../../lib/receipt';
 import { useCoreData } from '../../data/useCoreData';
 import { addMonths, formatDate, monthLabel, todayIso } from '../../lib/dates';
 import { balanceSheet, cashFlow, downloadCsv, fyPeriod, monthPeriod, profitAndLoss, type Line } from '../../lib/finance';
@@ -32,9 +33,7 @@ export function ReportsPage() {
       <div className="print:hidden">
         <PageHeader title="Reports" subtitle="Income, expenses and what the academy owns" />
       </div>
-      <h1 className="mb-4 hidden text-xl font-semibold print:block">
-        {data.settings.academy_name} · {TABS.find((t) => t.key === tab)?.label}
-      </h1>
+      <Letterhead settings={data.settings} title={TABS.find((t) => t.key === tab)?.label ?? 'Report'} />
       <div className="mb-4 flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface p-1 sm:inline-flex print:hidden" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key}
@@ -54,6 +53,37 @@ export function ReportsPage() {
       {tab === 'cash' && <CashFlow data={data} />}
       {tab === 'balance' && <Balance data={data} />}
     </div>
+  );
+}
+
+/** The receipt's letterhead (lib/receipt.ts), shown only when the report is printed or saved as PDF. */
+function Letterhead({ settings, title }: { settings: Settings; title: string }) {
+  const name = settings.academy_name || 'Academy';
+  const primary = brandColor(settings.brand_primary, '#0B1F3A');
+  const accent = brandColor(settings.brand_accent, '#C9A227');
+  const logo = receiptLogoUrl(settings);
+  return (
+    <header className="mb-5 hidden font-[Arial,Helvetica,sans-serif] print:block">
+      <div className="flex items-center gap-3">
+        {logo
+          ? <img src={logo} width={72} height={72} alt="" className="size-[72px] object-contain" />
+          : <div className="grid size-16 shrink-0 place-items-center rounded-xl text-[34px] font-bold" style={{ background: primary, color: accent }}>{name.charAt(0)}</div>}
+        <div className="flex-1">
+          <div className="font-[Georgia,'Times_New_Roman',serif] text-[26px] font-bold tracking-[1px]" style={{ color: primary }}>{name.toUpperCase()}</div>
+          {settings.academy_tagline && <div className="mt-0.5 font-[Georgia,'Times_New_Roman',serif] text-xs italic" style={{ color: primary }}>{settings.academy_tagline}</div>}
+        </div>
+        <div className="text-right text-[11px] leading-normal text-[#4b5563]">
+          {settings.academy_phone && <div>{settings.academy_phone}</div>}
+          {settings.academy_email && <div>{settings.academy_email}</div>}
+          {settings.gstin && <div>GSTIN: {settings.gstin}</div>}
+        </div>
+      </div>
+      <div className="mt-2.5 h-[3px]" style={{ background: accent }} />
+      <div className="mt-4 flex items-baseline justify-between">
+        <h1 className="text-[15px] font-bold tracking-[3px]" style={{ color: primary }}>{title.toUpperCase()}</h1>
+        <p className="text-[11px] text-[#6b7280]">Generated on {formatDate(todayIso())}</p>
+      </div>
+    </header>
   );
 }
 
@@ -83,10 +113,10 @@ function ExportButtons({ onCsv, className }: { onCsv?: () => void; className?: s
 
 function Stepper({ label, onPrev, onNext, nextDisabled }: { label: string; onPrev: () => void; onNext: () => void; nextDisabled: boolean }) {
   return (
-    <div className="inline-flex items-center rounded-xl border border-line bg-surface">
-      <button type="button" aria-label="Previous" onClick={onPrev} className="grid size-11 place-items-center text-muted hover:text-primary"><ChevronLeft className="size-5" aria-hidden /></button>
-      <span className="min-w-28 text-center font-medium">{label}</span>
-      <button type="button" aria-label="Next" disabled={nextDisabled} onClick={onNext} className="grid size-11 place-items-center text-muted hover:text-primary disabled:opacity-30"><ChevronRight className="size-5" aria-hidden /></button>
+    <div className="inline-flex items-center rounded-xl border border-line bg-surface print:border-0">
+      <button type="button" aria-label="Previous" onClick={onPrev} className="grid size-11 place-items-center text-muted hover:text-primary print:hidden"><ChevronLeft className="size-5" aria-hidden /></button>
+      <span className="min-w-28 text-center font-medium print:min-w-0 print:text-left">{label}</span>
+      <button type="button" aria-label="Next" disabled={nextDisabled} onClick={onNext} className="grid size-11 place-items-center text-muted hover:text-primary disabled:opacity-30 print:hidden"><ChevronRight className="size-5" aria-hidden /></button>
     </div>
   );
 }
@@ -146,7 +176,7 @@ function ProfitLoss({ data }: { data: CoreData }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-xl border border-line bg-surface p-1">
+        <div className="inline-flex rounded-xl border border-line bg-surface p-1 print:hidden">
           {(['month', 'fy'] as const).map((m) => (
             <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
               className={clsx('min-h-9 rounded-lg px-3 text-sm font-medium', mode === m ? 'bg-primary-soft text-primary' : 'text-muted')}>
