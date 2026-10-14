@@ -2,6 +2,7 @@ import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, Download, Printer, Settings2 } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
+import { ChartCard, Donut, InOutChart } from '../../components/charts';
 import { Button, Card, PageHeader, Spinner } from '../../components/ui';
 import type { CoreData } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
@@ -10,9 +11,11 @@ import { balanceSheet, cashFlow, downloadCsv, fyPeriod, monthPeriod, profitAndLo
 import { isDeleted, num } from '../../lib/values';
 import { useMoney } from '../fees/feeShared';
 import { BalanceItemsSheet } from './BalanceItemsSheet';
+import { ReportsOverview } from './ReportsOverview';
 
-type Tab = 'pl' | 'cash' | 'balance';
+type Tab = 'overview' | 'pl' | 'cash' | 'balance';
 const TABS: { key: Tab; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
   { key: 'pl', label: 'Profit & loss' },
   { key: 'cash', label: 'Cash flow' },
   { key: 'balance', label: 'Balance sheet' },
@@ -21,7 +24,7 @@ const TABS: { key: Tab; label: string }[] = [
 export function ReportsPage() {
   const { data, isPending } = useCoreData();
   const [params, setParams] = useSearchParams();
-  const tab = (TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'pl') as Tab;
+  const tab = (TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'overview') as Tab;
 
   if (isPending || !data) return <Spinner />;
   return (
@@ -32,15 +35,16 @@ export function ReportsPage() {
       <h1 className="mb-4 hidden text-xl font-semibold print:block">
         {data.settings.academy_name} · {TABS.find((t) => t.key === tab)?.label}
       </h1>
-      <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1 print:hidden" role="tablist">
+      <div className="mb-4 flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface p-1 sm:inline-flex print:hidden" role="tablist">
         {TABS.map((t) => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key}
-            onClick={() => setParams((p) => { if (t.key === 'pl') p.delete('tab'); else p.set('tab', t.key); return p; }, { replace: true })}
-            className={clsx('min-h-9 rounded-lg px-3 text-sm font-medium sm:px-4', tab === t.key ? 'bg-primary text-white' : 'text-muted')}>
+            onClick={() => setParams((p) => { if (t.key === 'overview') p.delete('tab'); else p.set('tab', t.key); return p; }, { replace: true })}
+            className={clsx('min-h-9 shrink-0 rounded-lg px-3 text-sm font-medium sm:px-4', tab === t.key ? 'bg-primary text-white' : 'text-muted')}>
             {t.label}
           </button>
         ))}
       </div>
+      {tab === 'overview' && <ReportsOverview data={data} />}
       {tab === 'pl' && <ProfitLoss data={data} />}
       {tab === 'cash' && <CashFlow data={data} />}
       {tab === 'balance' && <Balance data={data} />}
@@ -143,6 +147,16 @@ function ProfitLoss({ data }: { data: CoreData }) {
         <Section title="Expenses" lines={pl.expenses} total={pl.expenseTotal} totalLabel="Total expenses" empty="No expenses recorded in this period." />
         <ResultRow label={pl.net >= 0 ? 'Net profit' : 'Net loss'} value={pl.net} hint={pl.net > 0 && pl.incomeTotal ? `${margin}% of income kept as profit` : undefined} />
       </Card>
+      {(pl.incomeTotal > 0 || pl.expenseTotal > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2 print:hidden">
+          <ChartCard title="Where income came from" subtitle={period.label}>
+            <Donut data={pl.income.map((l) => ({ name: l.label, value: l.amount }))} totalLabel="income" />
+          </ChartCard>
+          <ChartCard title="Where money went" subtitle={period.label}>
+            <Donut data={pl.expenses.map((l) => ({ name: l.label, value: l.amount }))} totalLabel="expenses" />
+          </ChartCard>
+        </div>
+      )}
       <p className="text-xs text-muted">Counted when money is received or spent. Advance fees are included when they are paid.</p>
     </div>
   );
@@ -155,7 +169,6 @@ function CashFlow({ data }: { data: CoreData }) {
   const fy = fyPeriod(today, fyStart(data), fyOffset);
   const months = fy.months.filter((m) => m <= today.slice(0, 7));
   const rows = cashFlow(data.tables, months);
-  const max = Math.max(1, ...rows.flatMap((r) => [r.inflow, r.outflow]));
   const totals = rows.reduce((s, r) => ({ inflow: s.inflow + r.inflow, outflow: s.outflow + r.outflow }), { inflow: 0, outflow: 0 });
 
   function exportCsv() {
@@ -170,19 +183,17 @@ function CashFlow({ data }: { data: CoreData }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <Stepper label={fy.label} onPrev={() => setFyOffset((o) => o - 1)} onNext={() => setFyOffset((o) => o + 1)} nextDisabled={fyOffset >= 0} />
-        <span className="flex items-center gap-3 text-xs text-muted">
-          <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-success" /> In</span>
-          <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-full bg-danger/70" /> Out</span>
-        </span>
         <ExportButtons className="ml-auto" onCsv={exportCsv} />
       </div>
+      <Card className="print:hidden">
+        <InOutChart data={rows.map((r) => ({ label: monthLabel(r.month).slice(0, 3), inflow: r.inflow, outflow: r.outflow, net: r.net }))} />
+      </Card>
       <Card className="!p-0">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[34rem] text-sm">
+          <table className="w-full min-w-[28rem] text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-muted">
               <tr className="border-b border-line">
                 <th className="px-4 py-2 font-medium">Month</th>
-                <th className="px-2 py-2 font-medium" />
                 <th className="px-2 py-2 text-right font-medium">In</th>
                 <th className="px-2 py-2 text-right font-medium">Out</th>
                 <th className="px-4 py-2 text-right font-medium">Net</th>
@@ -192,10 +203,6 @@ function CashFlow({ data }: { data: CoreData }) {
               {rows.map((r) => (
                 <tr key={r.month}>
                   <td className="whitespace-nowrap px-4 py-2">{monthLabel(r.month)}</td>
-                  <td className="w-2/5 px-2 py-2">
-                    <span className="block h-2 rounded-full bg-success" style={{ width: `${(r.inflow / max) * 100}%` }} />
-                    <span className="mt-1 block h-2 rounded-full bg-danger/70" style={{ width: `${(r.outflow / max) * 100}%` }} />
-                  </td>
                   <td className="px-2 py-2 text-right tabular-nums">{money(r.inflow)}</td>
                   <td className="px-2 py-2 text-right tabular-nums">{money(r.outflow)}</td>
                   <td className={clsx('px-4 py-2 text-right font-medium tabular-nums', r.net < 0 && 'text-danger')}>{money(r.net)}</td>
@@ -204,7 +211,7 @@ function CashFlow({ data }: { data: CoreData }) {
             </tbody>
             <tfoot>
               <tr className="border-t border-line font-semibold">
-                <td className="px-4 py-2">Total</td><td />
+                <td className="px-4 py-2">Total</td>
                 <td className="px-2 py-2 text-right tabular-nums">{money(totals.inflow)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{money(totals.outflow)}</td>
                 <td className={clsx('px-4 py-2 text-right tabular-nums', totals.inflow < totals.outflow && 'text-danger')}>{money(totals.inflow - totals.outflow)}</td>

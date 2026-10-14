@@ -81,19 +81,58 @@ const PeopleApi = (() => {
     };
   }
 
+  /** Optional id chosen by the device (same shape as Util.newId), so it can show the new rows before the save returns. */
+  function clientId(value, prefix, field) {
+    if (value === undefined || value === null || value === '') return undefined;
+    const id = String(value);
+    if (!new RegExp(`^${prefix}-[a-z0-9]{6,12}-[a-z0-9]{6}$`).test(id)) Validate.fail(field, 'Invalid id');
+    return id;
+  }
+
+  /** The rows of an admission that was already saved (a repeated request), as admissions.create returns them. */
+  function savedAdmission(parentId, studentIds) {
+    const ids = new Set(studentIds);
+    const enrollments = Db.where('Enrollments', (e) => ids.has(e.student_id));
+    return {
+      changes: {
+        Parents: [Db.find('Parents', parentId)],
+        Students: Db.where('Students', (s) => ids.has(s.id)),
+        Enrollments: enrollments,
+        FeeDues: Db.where('FeeDues', (d) => ids.has(d.student_id)),
+      },
+      parent_id: parentId,
+      student_ids: studentIds,
+      duplicate: true,
+    };
+  }
+
   /**
    * admissions.create
-   * { parent: { id } | { guardian_name, phone, ... }, students: [{ name, class, ..., enrollments: [{ course_id, fee_plan_id, ... }] }] }
+   * { parent: { id } | { new_id?, guardian_name, phone, ... }, students: [{ new_id?, name, class, ..., enrollments: [{ course_id, fee_plan_id, ... }] }] }
+   * new_id: optional ids chosen by the device; sending the same admission again returns the saved rows.
    */
   function createAdmission(payload, ctx) {
     const studentsIn = Array.isArray(payload.students) ? payload.students : [];
     if (!studentsIn.length) Validate.fail('students', 'Add at least one student');
     if (studentsIn.length > 10) Validate.fail('students', 'At most 10 students per admission');
+    const parentIn = payload.parent || {};
+    const newParentId = parentIn.id ? undefined : clientId(parentIn.new_id, 'PAR', 'parent.new_id');
+    const newStudentIds = studentsIn.map((s, i) => clientId(s.new_id, 'STU', `students.${i}.new_id`));
+    if (new Set(newStudentIds.filter(Boolean)).size !== newStudentIds.filter(Boolean).length) Validate.fail('students', 'Invalid id');
 
     return Db.withLock(() => {
-      const parentIn = payload.parent || {};
       let parent;
       const changes = { Parents: [], Students: [], Enrollments: [] };
+
+      const existingStudents = newStudentIds.filter((id) => id && Db.find('Students', id));
+      if (existingStudents.length) {
+        const first = Db.find('Students', existingStudents[0]);
+        if (existingStudents.length === studentsIn.length && first.parent_id === (parentIn.id || newParentId)) {
+          return savedAdmission(first.parent_id, newStudentIds);
+        }
+        throw new AppError('CONFLICT', 'This admission clashes with existing records. Please try again.');
+      }
+      if (newParentId && Db.find('Parents', newParentId)) throw new AppError('CONFLICT', 'This admission clashes with existing records. Please try again.');
 
       if (parentIn.id) {
         parent = Db.find('Parents', parentIn.id);
@@ -130,13 +169,13 @@ const PeopleApi = (() => {
       if (!parent) {
         const fields = parentFields(parentIn);
         assertPhoneFree(fields.phone);
-        parent = Db.insert('Parents', [fields], 'PAR')[0];
+        parent = Db.insert('Parents', [Object.assign({ id: newParentId }, fields)], 'PAR')[0];
         changes.Parents.push(parent);
       }
 
       const chargeRows = [];
       prepared.forEach(({ student, enrollments, charges }, i) => {
-        const saved = Db.insert('Students', [Object.assign({ parent_id: parent.id }, student)], 'STU')[0];
+        const saved = Db.insert('Students', [Object.assign({ id: newStudentIds[i], parent_id: parent.id }, student)], 'STU')[0];
         changes.Students.push(saved);
         if (enrollments.length) {
           const rows = enrollments.map((e) => Object.assign({ student_id: saved.id, end_date: '', status: 'Active', status_reason: '' }, e));

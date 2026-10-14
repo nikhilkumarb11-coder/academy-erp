@@ -1,5 +1,7 @@
+import clsx from 'clsx';
 import { ChevronLeft, ChevronRight, Plus, Repeat, Tags } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Bars, ChartCard, Donut } from '../../components/charts';
 import { ExportButton } from '../../components/ExportButton';
 import { Button, Card, EmptyState, PageHeader, Spinner } from '../../components/ui';
 import { useCoreData } from '../../data/useCoreData';
@@ -30,16 +32,22 @@ export function ExpensesPage() {
     const byCategory = new Map<string, number>();
     rows.forEach((e) => byCategory.set(e.category_id, (byCategory.get(e.category_id) ?? 0) + num(e.amount)));
     const split = [...byCategory.entries()].map(([id, amount]) => ({ id, amount })).sort((a, b) => b.amount - a.amount);
+    const lastMonths = Array.from({ length: 6 }, (_, i) => addMonths(month, i - 5));
+    const trend = lastMonths.map((m) => ({
+      key: m,
+      label: monthLabel(m).slice(0, 3),
+      value: t.Expenses.filter((e) => !isDeleted(e) && e.date.slice(0, 7) === m).reduce((s, e) => s + num(e.amount), 0),
+    }));
     const recorded = new Set(t.Expenses.map((e) => e.ref_id).filter(Boolean));
     const due = month > thisMonth ? [] : t.RecurringExpenses
       .filter((r) => !isDeleted(r) && bool(r.active) && !bool(r.auto_create) && !recorded.has(`${r.id}:${month}`))
       .sort((a, b) => num(a.day_of_month) - num(b.day_of_month));
-    return { rows, total, prevTotal, split, due, recurringCount: t.RecurringExpenses.filter((r) => !isDeleted(r)).length };
+    return { rows, total, prevTotal, split, trend, due, recurringCount: t.RecurringExpenses.filter((r) => !isDeleted(r)).length };
   }, [data, month, thisMonth]);
 
   if (isPending || !view) return <Spinner />;
   const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Other';
-  const max = Math.max(1, ...view.split.map((s) => s.amount));
+  const change = view.prevTotal ? Math.round(((view.total - view.prevTotal) / view.prevTotal) * 100) : null;
 
   return (
     <>
@@ -61,28 +69,29 @@ export function ExpensesPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
-        <div className="space-y-4">
-          <Card>
-            <p className="text-sm text-muted">Spent in {monthLabel(month)}</p>
-            <p className="text-3xl font-semibold text-primary">{money(view.total)}</p>
-            <p className="mt-1 text-xs text-muted">{monthLabel(addMonths(month, -1))}: {money(view.prevTotal)}</p>
-            {view.split.length > 0 && (
-              <ul className="mt-4 space-y-2.5">
-                {view.split.map((s) => (
-                  <li key={s.id} className="grid grid-cols-[minmax(0,7rem)_1fr_auto] items-center gap-3 text-sm">
-                    <span className="break-words">{catName(s.id)}</span>
-                    <span className="h-2.5 overflow-hidden rounded-full bg-primary-soft">
-                      <span className="block h-full rounded-full bg-accent" style={{ width: `${(s.amount / max) * 100}%` }} />
-                    </span>
-                    <span className="text-right font-medium tabular-nums">{money(s.amount)}</span>
-                  </li>
-                ))}
-              </ul>
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <p className="text-sm text-muted">Spent in {monthLabel(month)}</p>
+              <p className="text-3xl font-semibold text-primary">{money(view.total)}</p>
+            </div>
+            {change !== null && (
+              <span className={clsx('rounded-full px-2.5 py-1 text-xs font-medium', change > 0 ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success')}>
+                {change > 0 ? '▲' : '▼'} {Math.abs(change)}% vs {monthLabel(addMonths(month, -1)).slice(0, 3)}
+              </span>
             )}
-          </Card>
+          </div>
+          <Donut data={view.split.map((s) => ({ name: catName(s.id), value: s.amount }))} totalLabel="spent" />
+        </Card>
+        <ChartCard title="Last 6 months" subtitle="Tap a month to see its expenses">
+          <Bars data={view.trend} highlight={month} onSelect={(m) => m && m <= thisMonth && setMonth(m)} height={240} />
+        </ChartCard>
+      </div>
 
-          {view.due.length > 0 && (
+      <div className={clsx('grid gap-4', view.due.length > 0 && 'lg:grid-cols-[1fr_1.4fr]')}>
+        {view.due.length > 0 && (
+          <div>
             <Card>
               <h2 className="mb-2 font-semibold">Due this month</h2>
               <ul className="divide-y divide-line">
@@ -97,8 +106,8 @@ export function ExpensesPage() {
                 ))}
               </ul>
             </Card>
-          )}
-        </div>
+          </div>
+        )}
 
         <Card className="!p-0">
           {view.rows.length === 0 ? (
@@ -108,9 +117,9 @@ export function ExpensesPage() {
             <ul className="divide-y divide-line">
               {view.rows.map((e) => (
                 <li key={e.id}>
-                  <button type="button" onClick={() => setOpen({ kind: 'expense', draft: { expense: e } })} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-canvas">
+                  <button type="button" disabled={e._pending} onClick={() => setOpen({ kind: 'expense', draft: { expense: e } })} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-canvas disabled:opacity-60">
                     <div className="min-w-0 flex-1">
-                      <p className="break-words font-medium">{e.payee || catName(e.category_id)}</p>
+                      <p className="break-words font-medium">{e.payee || catName(e.category_id)}{e._pending && <span className="ml-2 text-xs font-normal text-muted">Saving…</span>}</p>
                       <p className="break-words text-xs text-muted">
                         {formatDate(e.date)} · {catName(e.category_id)} · {e.mode}
                         {e.source === 'Recurring' && <Repeat className="ml-1 inline size-3" aria-label="recurring" />}

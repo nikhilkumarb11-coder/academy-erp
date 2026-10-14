@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { CloudOff, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { usePendingSaves } from '../data/pending';
 import { useCoreData } from '../data/useCoreData';
 
 function useOnline() {
@@ -25,10 +26,11 @@ function timeOf(ms: number) {
 export function SyncStatus({ compact }: { compact?: boolean }) {
   const { dataUpdatedAt, isFetching, isError, refetch } = useCoreData();
   const online = useOnline();
+  const saving = usePendingSaves();
 
-  const state = !online || isError ? 'offline' : isFetching ? 'syncing' : 'synced';
+  const state = !online || isError ? 'offline' : isFetching || saving ? 'syncing' : 'synced';
   const text =
-    state === 'offline' ? 'Offline · saved data' : state === 'syncing' ? 'Syncing…' : `Synced ${timeOf(dataUpdatedAt)}`;
+    state === 'offline' ? 'Offline · saved data' : saving ? 'Saving…' : state === 'syncing' ? 'Syncing…' : `Synced ${timeOf(dataUpdatedAt)}`;
   const Icon = state === 'offline' ? CloudOff : state === 'syncing' ? RefreshCw : CheckCircle2;
 
   return (

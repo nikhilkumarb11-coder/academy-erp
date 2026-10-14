@@ -3,6 +3,7 @@ import { useCallback, useMemo } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useTenant } from '../tenant/TenantContext';
 import { applyDelta, fromSnapshot } from './merge';
+import { carryPending, dropStalePending } from './pending';
 import { CORE_TABS, type CoreData, type CoreSnapshot } from './types';
 
 export const coreKey = (slug: string) => ['core', slug] as const;
@@ -30,16 +31,19 @@ export function useCoreData() {
       const fresh = !!cached?.loadedAt && Date.now() - cached.loadedAt < FULL_RELOAD_MS;
       if (cached?.syncedAt && fresh && CORE_TABS.every((t) => Array.isArray(cached.tables[t]))) {
         const delta = await api<CoreSnapshot>('system.sync', { since: cached.syncedAt });
-        return applyDelta(cached, delta);
+        // Saves may have landed in the cache while this request was out; merge into the latest copy.
+        const latest = queryClient.getQueryData<CoreData>(key) ?? cached;
+        return dropStalePending(applyDelta(latest, delta));
       }
-      return fromSnapshot(await api<CoreSnapshot>('system.bootstrap'));
+      const snapshot = await api<CoreSnapshot>('system.bootstrap');
+      return carryPending(queryClient.getQueryData<CoreData>(key), fromSnapshot(snapshot));
     },
   });
 
   /** Discards the cache and reloads everything (Settings → Refresh all data). */
   const fullReload = useCallback(async () => {
     const snapshot = await api<CoreSnapshot>('system.bootstrap');
-    queryClient.setQueryData(key, fromSnapshot(snapshot));
+    queryClient.setQueryData(key, carryPending(queryClient.getQueryData<CoreData>(key), fromSnapshot(snapshot)));
   }, [api, queryClient, key]);
 
   return { ...query, fullReload };

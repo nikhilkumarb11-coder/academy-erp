@@ -54,6 +54,7 @@ export function Field({
           'min-h-11 w-full rounded-xl border bg-surface px-3 text-base outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15',
           error ? 'border-danger' : 'border-line',
         )}
+        aria-invalid={error ? true : undefined}
         {...input}
       />
       {error ? <span className="mt-1 block text-xs text-danger">{error}</span> : hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
@@ -78,7 +79,7 @@ export function SelectField({
   return (
     <label className={clsx('block', className)}>
       <span className="mb-1 block text-sm font-medium text-ink">{label}</span>
-      <select className={clsx(controlClass(error), 'min-h-11 pr-8')} {...select}>
+      <select className={clsx(controlClass(error), 'min-h-11 pr-8')} aria-invalid={error ? true : undefined} {...select}>
         {children}
       </select>
       {error ? <span className="mt-1 block text-xs text-danger">{error}</span> : hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
@@ -96,7 +97,7 @@ export function TextAreaField({
   return (
     <label className={clsx('block', className)}>
       <span className="mb-1 block text-sm font-medium text-ink">{label}</span>
-      <textarea rows={3} className={clsx(controlClass(error), 'py-2')} {...area} />
+      <textarea rows={3} className={clsx(controlClass(error), 'py-2')} aria-invalid={error ? true : undefined} {...area} />
       {error ? <span className="mt-1 block text-xs text-danger">{error}</span> : hint && <span className="mt-1 block text-xs text-muted">{hint}</span>}
     </label>
   );

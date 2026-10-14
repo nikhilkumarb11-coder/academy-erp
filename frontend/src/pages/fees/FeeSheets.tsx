@@ -1,14 +1,15 @@
 import clsx from 'clsx';
 import { CheckCircle2, ExternalLink, MessageCircle, Share2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { errorField, fieldError } from '../../api/fieldErrors';
 import { errorMessage } from '../../api/errors';
 import { Sheet } from '../../components/Sheet';
 import { useToast } from '../../components/Toast';
 import { Alert, Button, Field, SelectField, TextAreaField } from '../../components/ui';
-import type { FeeDue, Payment, PaymentMode } from '../../data/types';
+import { tempId } from '../../data/pending';
+import type { FeeDue, Payment, PaymentAllocation, PaymentMode } from '../../data/types';
 import { useCoreData, useCoreTables } from '../../data/useCoreData';
-import { useWrite, type WriteResult } from '../../data/useWrite';
+import { useInstantWrite, useWrite, type WriteResult } from '../../data/useWrite';
 import { addMonths, formatDate, monthLabel, todayIso } from '../../lib/dates';
 import { byDueOrder, creditOf, dueNet, dueTitle, isOpenDue, previewAllocation } from '../../lib/ledger';
 import { bool, num } from '../../lib/values';
@@ -40,20 +41,42 @@ interface RecordResult extends WriteResult {
   receipt_no: string;
 }
 
-export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId: string; onClose: () => void; onRecorded: (paymentId: string) => void }) {
+/** A payment whose save failed, reopened with the same values and client_ref so a retry cannot record it twice. */
+export interface PaymentDraft {
+  amount: string;
+  mode: PaymentMode;
+  paidAt: string;
+  notes: string;
+  clientRef: string;
+  error: string;
+}
+
+interface RecordPaymentProps {
+  parentId: string;
+  draft?: PaymentDraft;
+  onClose: () => void;
+  /** Called at once with a temporary id; the payment shows while it saves. */
+  onRecorded: (paymentId: string) => void;
+  /** Called when the server confirms, with the temporary and the real id. */
+  onSaved: (tempPaymentId: string, paymentId: string) => void;
+  onFailed: (draft: PaymentDraft) => void;
+}
+
+export function RecordPaymentSheet({ parentId, draft, onClose, onRecorded, onSaved, onFailed }: RecordPaymentProps) {
   const t = useCoreTables();
   const money = useMoney();
-  const record = useWrite<Record<string, unknown>, RecordResult>('payments.record');
-  const [clientRef] = useState(() => crypto.randomUUID());
+  const recordNow = useInstantWrite<Record<string, unknown>, RecordResult>('payments.record');
+  const [clientRef] = useState(() => draft?.clientRef ?? crypto.randomUUID());
 
   const openDues = useMemo(() => (t?.FeeDues ?? []).filter((d) => d.parent_id === parentId && isOpenDue(d)).sort(byDueOrder), [t, parentId]);
   const outstanding = openDues.reduce((s, d) => s + num(d.balance), 0);
-  const [amount, setAmount] = useState(outstanding ? String(outstanding) : '');
-  const [mode, setMode] = useState<PaymentMode>('Cash');
-  const [paidAt, setPaidAt] = useState(todayIso());
-  const [notes, setNotes] = useState('');
+  const [amount, setAmount] = useState(draft?.amount ?? (outstanding ? String(outstanding) : ''));
+  const [mode, setMode] = useState<PaymentMode>(draft?.mode ?? 'Cash');
+  const [paidAt, setPaidAt] = useState(draft?.paidAt ?? todayIso());
+  const [notes, setNotes] = useState(draft?.notes ?? '');
   const [choose, setChoose] = useState(false);
   const [picked, setPicked] = useState<Record<string, string>>({});
+  const [problem, setProblem] = useState<{ field: string; text: string } | null>(null);
 
   if (!t) return null;
   const value = num(amount);
@@ -62,10 +85,33 @@ export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId
     : previewAllocation(openDues, value);
   const allocated = preview.reduce((s, p) => s + p.amount, 0);
   const extra = Math.max(0, value - allocated);
+  const errorFor = (field: string) => (problem?.field === field ? problem.text : undefined);
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    record.mutate(
+    // Checked here because the sheet closes before the server answers.
+    const found = !(value >= 1) ? { field: 'amount', text: 'Enter the amount received' }
+      : !paidAt || paidAt > todayIso() ? { field: 'paid_at', text: 'Payment date cannot be in the future' }
+      : choose && !preview.length ? { field: 'amount', text: 'Choose at least one due, or switch to Automatic' }
+      : null;
+    setProblem(found);
+    if (found) return;
+
+    const now = new Date().toISOString();
+    const stamp = { created_at: now, updated_at: now };
+    const paymentId = tempId();
+    const payment: Payment = {
+      id: paymentId, parent_id: parentId, amount: value, mode, paid_at: paidAt, gateway_payment_id: '', link_id: '',
+      receipt_no: '', status: 'Recorded', cancel_reason: '', notes, client_ref: clientRef, ...stamp,
+    };
+    const dues: FeeDue[] = preview.map(({ due, amount: paid }) => {
+      const balance = num(due.balance) - paid;
+      return { ...due, amount_paid: num(due.amount_paid) + paid, balance, status: balance <= 0 ? 'Paid' : 'Partial', updated_at: now };
+    });
+    const allocations: PaymentAllocation[] = preview.map((p) => ({ id: tempId(), payment_id: paymentId, due_id: p.due.id, student_id: p.due.student_id, amount: p.amount, ...stamp }));
+    if (extra > 0) allocations.push({ id: tempId(), payment_id: paymentId, due_id: '', student_id: '', amount: extra, ...stamp });
+
+    recordNow(
       {
         parent_id: parentId,
         amount: value,
@@ -75,8 +121,15 @@ export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId
         client_ref: clientRef,
         allocations: choose ? preview.map((p) => ({ due_id: p.due.id, amount: p.amount })) : undefined,
       },
-      { onSuccess: (res) => onRecorded(res.payment_id) },
+      {
+        show: { Payments: [payment], FeeDues: dues, PaymentAllocations: allocations },
+        previous: { FeeDues: preview.map((p) => p.due) },
+        failure: 'Payment not saved',
+        onSuccess: (res) => onSaved(paymentId, res.payment_id),
+        onError: (err) => onFailed({ amount, mode, paidAt, notes, clientRef, error: errorMessage(err) }),
+      },
     );
+    onRecorded(paymentId);
   }
 
   function togglePick(d: FeeDue) {
@@ -91,11 +144,12 @@ export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId
   }
 
   return (
-    <Sheet open title="Record payment" onClose={onClose} footer={<Footer formId="pay-form" saving={record.isPending} label={value ? `Record ${money(value)}` : 'Record payment'} />}>
+    <Sheet open title="Record payment" onClose={onClose} footer={<Footer formId="pay-form" saving={false} label={value ? `Record ${money(value)}` : 'Record payment'} />}>
       <form id="pay-form" onSubmit={submit} className="space-y-4">
+        {draft?.error && <Alert>Not saved: {draft.error}. Check and record again.</Alert>}
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(digits(e.target.value))} error={fieldError(record.error, 'amount')} hint={outstanding ? `Outstanding ${money(outstanding)}` : 'No dues: this becomes an advance'} autoFocus />
-          <Field label="Date" type="date" value={paidAt} max={todayIso()} onChange={(e) => setPaidAt(e.target.value)} error={fieldError(record.error, 'paid_at')} />
+          <Field label="Amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(digits(e.target.value))} error={errorFor('amount')} hint={outstanding ? `Outstanding ${money(outstanding)}` : 'No dues: this becomes an advance'} autoFocus />
+          <Field label="Date" type="date" value={paidAt} max={todayIso()} onChange={(e) => setPaidAt(e.target.value)} error={errorFor('paid_at')} />
         </div>
         <fieldset>
           <legend className="mb-1 text-sm font-medium">Mode</legend>
@@ -158,11 +212,35 @@ export function RecordPaymentSheet({ parentId, onClose, onRecorded }: { parentId
         )}
         {extra > 0 && <Alert tone="info">{money(extra)} more than the dues{choose ? ' chosen' : ''}: it is kept as an advance and used for the next dues automatically.</Alert>}
 
-        <TextAreaField label="Note (optional)" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. UPI ref 4521" />
-        <ErrorBanner error={record.error} inline={['amount', 'paid_at']} />
+        <TextAreaField label="Note (optional)" rows={2} maxLength={300} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. UPI ref 4521" />
       </form>
     </Sheet>
   );
+}
+
+/** Record payment → done sheet, including the id swap when the save is confirmed and reopening on failure. */
+export function usePaymentFlow() {
+  const [paying, setPaying] = useState<{ parentId: string; draft?: PaymentDraft } | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const pay = useCallback((parentId: string) => setPaying({ parentId }), []);
+
+  const sheets = (
+    <>
+      {paying && (
+        <RecordPaymentSheet
+          key={paying.draft?.clientRef ?? paying.parentId}
+          parentId={paying.parentId}
+          draft={paying.draft}
+          onClose={() => setPaying(null)}
+          onRecorded={(id) => { setPaying(null); setDone(id); }}
+          onSaved={(temp, id) => setDone((current) => (current === temp ? id : current))}
+          onFailed={(draft) => { setDone(null); setPaying({ parentId: paying.parentId, draft }); }}
+        />
+      )}
+      {done && <PaymentDoneSheet paymentId={done} onClose={() => setDone(null)} />}
+    </>
+  );
+  return { pay, sheets };
 }
 
 /** Shown after a payment: receipt number and the ways to send it. */
@@ -174,9 +252,10 @@ export function PaymentDoneSheet({ paymentId, onClose }: { paymentId: string; on
   const payment = t?.Payments.find((p) => p.id === paymentId);
   const { warmUp } = receipt;
   useEffect(() => {
-    if (payment) warmUp(payment);
+    if (payment && !payment._pending) warmUp(payment);
   }, [payment, warmUp]);
   if (!payment) return null;
+  const saving = !!payment._pending;
   const parent = t?.Parents.find((p) => p.id === payment.parent_id);
   const run = (key: string, fn: (p: Payment) => Promise<void>) => async () => {
     setBusy(key);
@@ -190,14 +269,14 @@ export function PaymentDoneSheet({ paymentId, onClose }: { paymentId: string; on
         <CheckCircle2 className="size-12 text-success" aria-hidden />
         <p className="text-2xl font-semibold">{money(num(payment.amount))}</p>
         <p className="text-sm text-muted">{parent?.guardian_name} · {payment.mode} · {formatDate(payment.paid_at)}</p>
-        <p className="mt-1 rounded-full bg-primary-soft px-3 py-1 text-sm font-medium text-primary">Receipt {payment.receipt_no}</p>
+        <p className="mt-1 rounded-full bg-primary-soft px-3 py-1 text-sm font-medium text-primary">{saving ? 'Saving… receipt number in a moment' : `Receipt ${payment.receipt_no}`}</p>
       </div>
       <div className="mt-4 grid gap-2">
-        <Button onClick={run('share', receipt.share)} loading={busy === 'share'}><Share2 className="size-4" aria-hidden /> Share receipt</Button>
-        <Button variant="secondary" onClick={run('wa', receipt.sendWhatsApp)} loading={busy === 'wa'}><MessageCircle className="size-4" aria-hidden /> Send link on WhatsApp</Button>
-        <Button variant="ghost" onClick={run('open', receipt.open)} loading={busy === 'open'}><ExternalLink className="size-4" aria-hidden /> View receipt</Button>
+        <Button onClick={run('share', receipt.share)} disabled={saving} loading={busy === 'share'}><Share2 className="size-4" aria-hidden /> Share receipt</Button>
+        <Button variant="secondary" onClick={run('wa', receipt.sendWhatsApp)} disabled={saving} loading={busy === 'wa'}><MessageCircle className="size-4" aria-hidden /> Send link on WhatsApp</Button>
+        <Button variant="ghost" onClick={run('open', receipt.open)} disabled={saving} loading={busy === 'open'}><ExternalLink className="size-4" aria-hidden /> View receipt</Button>
       </div>
-      <p className="mt-3 text-center text-xs text-muted">Share sends the receipt as a PDF file. It is prepared when this opens and can take a few seconds.</p>
+      <p className="mt-3 text-center text-xs text-muted">Share sends the receipt as a PDF file. It is prepared after the payment saves and can take a few seconds.</p>
     </Sheet>
   );
 }

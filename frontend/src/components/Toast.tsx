@@ -17,7 +17,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback((text: string, tone: ToastItem['tone'] = 'success') => {
     const id = nextId.current++;
     setItems((list) => [...list.slice(-2), { id, text, tone }]);
-    setTimeout(() => setItems((list) => list.filter((t) => t.id !== id)), 3500);
+    setTimeout(() => setItems((list) => list.filter((t) => t.id !== id)), tone === 'error' ? 7000 : 3500);
   }, []);
 
   return (

@@ -214,6 +214,31 @@ describe('admissions', () => {
     assert.equal(sibling.changes.Students[0].parent_id, first.parent_id);
   });
 
+  it('keeps ids chosen by the device and treats a repeated request as the same admission', async () => {
+    const { be, token } = ctx;
+    const body = admission(ctx);
+    body.parent.new_id = 'PAR-mg1abc2d-x1y2z3';
+    body.students[0].new_id = 'STU-mg1abc2d-aaaaaa';
+    body.students[1].new_id = 'STU-mg1abc2d-bbbbbb';
+    const res = await be.ok('admissions.create', body, token);
+    assert.equal(res.parent_id, 'PAR-mg1abc2d-x1y2z3');
+    assert.deepEqual(res.student_ids, ['STU-mg1abc2d-aaaaaa', 'STU-mg1abc2d-bbbbbb']);
+    assert.equal(res.changes.Students[1].parent_id, 'PAR-mg1abc2d-x1y2z3');
+
+    const again = await be.ok('admissions.create', body, token);
+    assert.equal(again.duplicate, true);
+    assert.equal(again.changes.Students.length, 2);
+    assert.equal(again.changes.Enrollments.length, 4);
+    assert.equal(be.sheetRows('Students').length, 2);
+
+    const clash = admission(ctx, { parent: { guardian_name: 'B', phone: '9000000002' } });
+    clash.students = [{ name: 'X', new_id: 'STU-mg1abc2d-aaaaaa', enrollments: [] }];
+    assert.equal((await be.call('admissions.create', clash, token)).error.code, 'CONFLICT');
+
+    const bad = admission(ctx, { parent: { guardian_name: 'C', phone: '9000000003', new_id: 'Parents!1' } });
+    assert.equal((await be.call('admissions.create', bad, token)).error.code, 'VALIDATION');
+  });
+
   it('rejects the same course twice, inactive courses, bad phones and invalid select values', async () => {
     const { be, token } = ctx;
     const twice = admission(ctx);

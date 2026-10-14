@@ -1,4 +1,5 @@
-import { ArrowLeft, MessageCircle, Pencil, Phone, Plus, UserPlus } from 'lucide-react';
+import clsx from 'clsx';
+import { ArrowLeft, Loader2, MessageCircle, Pencil, Phone, Plus, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useCustomFields } from '../../components/CustomFieldInputs';
@@ -71,7 +72,9 @@ export function StudentProfilePage() {
       <PageHeader
         title={student.name}
         subtitle={[student.class && `${labels.class} ${student.class}`, parent?.guardian_name].filter(Boolean).join(' · ')}
-        actions={
+        actions={student._pending ? (
+          <span className="inline-flex items-center gap-2 text-sm text-muted"><Loader2 className="size-4 animate-spin" aria-hidden /> Saving…</span>
+        ) : (
           <>
             <button type="button" onClick={() => setSheet({ kind: 'status' })} className="rounded-full" aria-label={`Status: ${student.status}. Change status`}>
               <StatusBadge status={student.status} />
@@ -80,7 +83,7 @@ export function StudentProfilePage() {
               <Pencil className="size-4" aria-hidden /> Edit
             </Button>
           </>
-        }
+        )}
       />
       {student.status !== 'Active' && student.status_reason && (
         <p className="-mt-3 mb-4 text-sm text-muted">
@@ -93,7 +96,7 @@ export function StudentProfilePage() {
         <Card className="lg:col-span-2">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-lg font-semibold">{labels.courses}</h2>
-            {!closed && (
+            {!closed && !student._pending && (
               <Button variant="secondary" className="min-h-10" onClick={() => setSheet({ kind: 'enrollment', enrollment: null })}>
                 <Plus className="size-4" aria-hidden /> Add {labels.course.toLowerCase()}
               </Button>
@@ -124,7 +127,7 @@ export function StudentProfilePage() {
                           {e.status !== 'Active' && e.status_reason && ` · ${e.status_reason}`}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className={clsx('flex items-center gap-1', e._pending && 'pointer-events-none opacity-60')}>
                         <button type="button" onClick={() => setSheet({ kind: 'enrollmentStatus', enrollment: e })} className="rounded-full" aria-label={`${c?.name}: ${e.status}. Change status`}>
                           <StatusBadge status={e.status} />
                         </button>
@@ -145,7 +148,7 @@ export function StudentProfilePage() {
         <Card>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-lg font-semibold">{labels.guardian}</h2>
-            {parent && (
+            {parent && !parent._pending && (
               <Button variant="ghost" className="min-h-9 px-2" onClick={() => setSheet({ kind: 'parent' })} aria-label={`Edit ${labels.guardian.toLowerCase()}`}>
                 <Pencil className="size-4" aria-hidden />
               </Button>

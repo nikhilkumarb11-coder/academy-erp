@@ -7,7 +7,8 @@ import { useToast } from '../../components/Toast';
 import { Alert, Button, EmptyState, Field, SelectField, TextAreaField, Toggle } from '../../components/ui';
 import { EXPENSE_MODES, type Expense, type ExpenseCategory, type ExpenseMode, type RecurringExpense } from '../../data/types';
 import { useCoreTables } from '../../data/useCoreData';
-import { useWrite } from '../../data/useWrite';
+import { tempId } from '../../data/pending';
+import { useInstantWrite, useWrite } from '../../data/useWrite';
 import { todayIso } from '../../lib/dates';
 import { bool, isDeleted, num } from '../../lib/values';
 import { bySortOrder } from '../courses/catalogHooks';
@@ -42,8 +43,9 @@ export interface ExpenseDraft {
 export function ExpenseSheet({ draft, onClose }: { draft: ExpenseDraft; onClose: () => void }) {
   const categories = useExpenseCategories();
   const toast = useToast();
-  const save = useWrite('expenses.save');
-  const remove = useWrite('expenses.delete');
+  const saveNow = useInstantWrite('expenses.save');
+  const removeNow = useInstantWrite('expenses.delete');
+  const [problem, setProblem] = useState<{ field: string; text: string } | null>(null);
   const { expense, from } = draft;
   const today = todayIso();
   const defaultDate = from && draft.month ? `${draft.month}-${String(num(from.day_of_month, 1)).padStart(2, '0')}` : today;
@@ -56,39 +58,61 @@ export function ExpenseSheet({ draft, onClose }: { draft: ExpenseDraft; onClose:
     notes: expense?.notes ?? from?.notes ?? '',
   });
   const set = <K extends keyof typeof v>(k: K, value: (typeof v)[K]) => setV((s) => ({ ...s, [k]: value }));
-  const err = save.error ?? remove.error;
-  const inline = ['date', 'category_id', 'amount', 'mode', 'payee', 'notes'];
+  const errorFor = (field: string) => (problem?.field === field ? problem.text : undefined);
+
+  // Checked here because the sheet closes before the server answers.
+  function check(): { field: string; text: string } | null {
+    if (!v.date || v.date > today) return { field: 'date', text: 'Choose a date up to today' };
+    if (!categories.some((c) => c.id === v.category_id)) return { field: 'category_id', text: 'Choose a category' };
+    const amount = num(v.amount);
+    if (!(amount >= 1) || amount > 100000000) return { field: 'amount', text: 'Enter an amount of at least 1' };
+    return null;
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const refId = from && draft.month ? `${from.id}:${draft.month}` : undefined;
-    save.mutate({ row: { id: expense?.id, ...v, ref_id: refId } }, {
-      onSuccess: () => { toast(expense ? 'Expense updated' : 'Expense recorded'); onClose(); },
+    const found = check();
+    setProblem(found);
+    if (found) return;
+    const refId = from && draft.month ? `${from.id}:${draft.month}` : '';
+    const now = new Date().toISOString();
+    const row: Expense = {
+      source: refId ? 'Recurring' : 'Manual', ref_id: refId, created_at: now,
+      ...expense,
+      ...v, amount: num(v.amount), id: expense?.id ?? tempId(), updated_at: now,
+    };
+    saveNow({ row: { id: expense?.id, ...v, ref_id: refId || undefined } }, {
+      show: { Expenses: [row] },
+      previous: expense ? { Expenses: [expense] } : undefined,
+      failure: expense ? 'Expense not updated' : 'Expense not saved',
     });
+    toast(expense ? 'Expense updated' : 'Expense recorded');
+    onClose();
   }
 
   function del() {
     if (!expense || !window.confirm('Delete this expense?')) return;
-    remove.mutate({ id: expense.id }, { onSuccess: () => { toast('Expense deleted'); onClose(); } });
+    removeNow({ id: expense.id }, { show: { Expenses: [{ id: expense.id, deleted: true }] }, previous: { Expenses: [expense] }, failure: 'Expense not deleted' });
+    toast('Expense deleted');
+    onClose();
   }
 
   return (
     <Sheet open title={expense ? 'Edit expense' : 'Record expense'} onClose={onClose}
-      footer={<DeleteFooter formId="expense-form" saving={save.isPending} deleting={remove.isPending} onDelete={expense ? del : undefined} />}>
+      footer={<DeleteFooter formId="expense-form" saving={false} onDelete={expense ? del : undefined} />}>
       <form id="expense-form" onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
-        <Field label="Amount" inputMode="decimal" value={v.amount} onChange={(e) => set('amount', digitsOnly(e.target.value))} autoFocus={!expense} error={fieldError(err, 'amount')} />
-        <Field label="Date" type="date" value={v.date} max={today} onChange={(e) => set('date', e.target.value)} error={fieldError(err, 'date')} />
-        <SelectField label="Category" value={v.category_id} onChange={(e) => set('category_id', e.target.value)} error={fieldError(err, 'category_id')}>
+        <Field label="Amount" inputMode="decimal" value={v.amount} onChange={(e) => set('amount', digitsOnly(e.target.value))} autoFocus={!expense} error={errorFor('amount')} />
+        <Field label="Date" type="date" value={v.date} max={today} onChange={(e) => set('date', e.target.value)} error={errorFor('date')} />
+        <SelectField label="Category" value={v.category_id} onChange={(e) => set('category_id', e.target.value)} error={errorFor('category_id')}>
           {!v.category_id && <option value="">Choose…</option>}
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </SelectField>
-        <SelectField label="Paid by" value={v.mode} onChange={(e) => set('mode', e.target.value as ExpenseMode)} error={fieldError(err, 'mode')}>
+        <SelectField label="Paid by" value={v.mode} onChange={(e) => set('mode', e.target.value as ExpenseMode)}>
           {EXPENSE_MODES.map((m) => <option key={m}>{m}</option>)}
         </SelectField>
-        <Field label="Paid to (optional)" className="sm:col-span-2" placeholder="e.g. Landlord, coach name, shop" value={v.payee} onChange={(e) => set('payee', e.target.value)} error={fieldError(err, 'payee')} />
-        <TextAreaField label="Notes (optional)" className="sm:col-span-2" rows={2} value={v.notes} onChange={(e) => set('notes', e.target.value)} error={fieldError(err, 'notes')} />
+        <Field label="Paid to (optional)" className="sm:col-span-2" placeholder="e.g. Landlord, coach name, shop" maxLength={80} value={v.payee} onChange={(e) => set('payee', e.target.value)} />
+        <TextAreaField label="Notes (optional)" className="sm:col-span-2" rows={2} maxLength={300} value={v.notes} onChange={(e) => set('notes', e.target.value)} />
         {expense?.source === 'Recurring' && <p className="text-xs text-muted sm:col-span-2"><Repeat className="mr-1 inline size-3.5" aria-hidden />Added from a recurring expense.</p>}
-        {err && !inline.includes(errorField(err) ?? '') && <div className="sm:col-span-2"><Alert>{errorMessage(err)}</Alert></div>}
       </form>
     </Sheet>
   );

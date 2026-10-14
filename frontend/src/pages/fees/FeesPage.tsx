@@ -9,7 +9,7 @@ import { todayIso } from '../../lib/dates';
 import { AGE_BUCKETS, collected, familySummaries, type AgeBucket } from '../../lib/ledger';
 import { phoneDigits } from '../../lib/phone';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
-import { GenerateDuesSheet, PaymentDoneSheet, RecordPaymentSheet } from './FeeSheets';
+import { GenerateDuesSheet, usePaymentFlow } from './FeeSheets';
 import { useLogMessages } from '../../data/useMessages';
 import { familyReminder, useMoney } from './feeShared';
 
@@ -26,8 +26,7 @@ export function FeesPage() {
   const query = params.get('q') ?? '';
   const deferredQuery = useDeferredValue(query);
   const [generating, setGenerating] = useState(false);
-  const [paying, setPaying] = useState<string | null>(null);
-  const [donePayment, setDonePayment] = useState<string | null>(null);
+  const payment = usePaymentFlow();
   const today = todayIso();
 
   const setParam = (key: string, value: string, fallback = '') =>
@@ -144,7 +143,7 @@ export function FeesPage() {
                 </div>
                 {f.outstanding > 0 && (
                   <div className="mt-3 flex gap-2">
-                    <Button className="min-h-10 flex-1" onClick={() => setPaying(f.parentId)}><Wallet className="size-4" aria-hidden /> Collect</Button>
+                    <Button className="min-h-10 flex-1" onClick={() => payment.pay(f.parentId)}><Wallet className="size-4" aria-hidden /> Collect</Button>
                     {remind && (
                       <a href={remind.url} target="_blank" rel="noreferrer"
                         onClick={() => logMessages([{ type: 'FeeReminder', parent_id: f.parentId, preview: remind.text }])}
@@ -161,8 +160,7 @@ export function FeesPage() {
       )}
 
       {generating && <GenerateDuesSheet onClose={() => setGenerating(false)} />}
-      {paying && <RecordPaymentSheet parentId={paying} onClose={() => setPaying(null)} onRecorded={(id) => { setPaying(null); setDonePayment(id); }} />}
-      {donePayment && <PaymentDoneSheet paymentId={donePayment} onClose={() => setDonePayment(null)} />}
+      {payment.sheets}
     </>
   );
 }

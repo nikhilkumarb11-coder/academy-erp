@@ -1,15 +1,17 @@
 import clsx from 'clsx';
 import { Check, ChevronDown, Plus, UserPlus, X } from 'lucide-react';
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { ApiError, errorMessage } from '../../api/errors';
 import { errorField, fieldError } from '../../api/fieldErrors';
-import { CustomFieldInputs, type ExtraValues } from '../../components/CustomFieldInputs';
+import { CustomFieldInputs, useCustomFields, type ExtraValues } from '../../components/CustomFieldInputs';
 import { useToast } from '../../components/Toast';
 import { Alert, Button, Card, Field, PageHeader, Spinner, TextAreaField } from '../../components/ui';
-import type { ChargeItem, Course, Parent } from '../../data/types';
+import { newId, tempId } from '../../data/pending';
+import type { ChargeItem, Course, Enrollment, Parent, Student } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
-import { useWrite, type WriteResult } from '../../data/useWrite';
+import { useInstantWrite, type WriteResult } from '../../data/useWrite';
+import { todayIso } from '../../lib/dates';
 import { formatMoney, monthlyFeeFor, planAmount } from '../../lib/fees';
 import { formatPhone, normalizePhone, phoneProblem } from '../../lib/phone';
 import { bool, isDeleted, num } from '../../lib/values';
@@ -45,6 +47,19 @@ interface AdmissionResult extends WriteResult {
 let childKey = 1;
 const emptyChild = (): ChildDraft => ({ key: childKey++, name: '', class: '', dob: '', extra: {}, enrollments: [], charges: {} });
 
+/** An admission the server rejected after the app had moved on; the form reopens with it. */
+interface FailedAdmission {
+  existingParentId: string | null;
+  parent: ParentDraft;
+  children: ChildDraft[];
+  collectNow: boolean;
+  enquiryId: string | null;
+  /** Reused on retry so a save that did reach the server is not created twice. */
+  ids: { parentId: string; studentIds: string[] };
+  error: unknown;
+}
+let failedAdmission: FailedAdmission | null = null;
+
 function chargeOf(child: ChildDraft, item: ChargeItem) {
   return child.charges[item.id] ?? { on: true, amount: num(item.default_amount) ? String(num(item.default_amount)) : '' };
 }
@@ -57,18 +72,29 @@ export function AdmissionPage() {
   const [params] = useSearchParams();
   const { data, isPending } = useCoreData();
   const plans = useActivePlans();
-  const create = useWrite<Record<string, unknown>, AdmissionResult>('admissions.create');
+  const studentFields = useCustomFields('Student');
+  const createNow = useInstantWrite<Record<string, unknown>, AdmissionResult>('admissions.create');
+  const [restored] = useState(() => {
+    const failed = failedAdmission;
+    failedAdmission = null;
+    return failed;
+  });
+  useEffect(() => {
+    if (restored) requestAnimationFrame(() => document.querySelector('[aria-invalid="true"]')?.scrollIntoView({ block: 'center' }));
+  }, [restored]);
 
-  const [existingParentId, setExistingParentId] = useState<string | null>(params.get('parent'));
+  const [existingParentId, setExistingParentId] = useState<string | null>(restored ? restored.existingParentId : params.get('parent'));
   const [dismissedMatch, setDismissedMatch] = useState<string | null>(null);
-  const [parent, setParent] = useState<ParentDraft>({ guardian_name: '', phone: '', alt_phone: '', email: '', address: '', notes: '' });
+  const [parent, setParent] = useState<ParentDraft>(restored?.parent ?? { guardian_name: '', phone: '', alt_phone: '', email: '', address: '', notes: '' });
   const [moreParent, setMoreParent] = useState(false);
-  const [children, setChildren] = useState<ChildDraft[]>(() => [emptyChild()]);
-  const [collectNow, setCollectNow] = useState(true);
+  const [children, setChildren] = useState<ChildDraft[]>(() => restored?.children ?? [emptyChild()]);
+  const [collectNow, setCollectNow] = useState(restored?.collectNow ?? true);
+  const [err, setErr] = useState<unknown>(restored?.error ?? null);
 
   const t = data?.tables;
-  const enquiry = t?.Enquiries.find((q) => q.id === params.get('enquiry') && !isDeleted(q) && q.status !== 'Converted') ?? null;
-  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
+  const enquiryId = restored ? restored.enquiryId : params.get('enquiry');
+  const enquiry = t?.Enquiries.find((q) => q.id === enquiryId && !isDeleted(q) && q.status !== 'Converted') ?? null;
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(restored?.enquiryId ?? null);
   if (enquiry && t && prefilledFrom !== enquiry.id) {
     setPrefilledFrom(enquiry.id);
     const courseIds = enquiry.course_interested.split(',').map((s) => s.trim())
@@ -120,7 +146,6 @@ export function AdmissionPage() {
     { courses: 0, firstBill: 0, unpriced: 0 },
   );
 
-  const err = create.error;
   const childErr = (i: number, field: string) => fieldError(err, `students.${i}.${field}`);
   const conflictParentId = err instanceof ApiError && err.code === 'CONFLICT' ? (err.details as { parent_id?: string } | undefined)?.parent_id : undefined;
   const shownInline = (() => {
@@ -129,12 +154,48 @@ export function AdmissionPage() {
     return f === 'parent.guardian_name' || f === 'parent.phone' || /^students\.\d+\.(name|class|dob)$/.test(f) || /^students\.\d+\.extra\./.test(f) || /^students\.\d+\.enrollments\.\d+\./.test(f) || /^students\.\d+\.charges\.\d+\.amount$/.test(f);
   })();
 
+  // Checked here because the app moves on before the server answers; the server checks everything again.
+  function check(): ApiError | null {
+    const fail = (field: string, message: string) => new ApiError('VALIDATION', message, { field });
+    if (!existingParent) {
+      const phoneIssue = phoneProblem(parent.phone, locale.countryCode);
+      if (!normalized || phoneIssue) return fail('parent.phone', phoneIssue ?? 'Enter the phone number');
+      if (phoneMatch) return fail('parent.phone', `${phoneMatch.guardian_name} is already registered with this phone number`);
+      if (!parent.guardian_name.trim()) return fail('parent.guardian_name', `Enter the ${labels.guardian.toLowerCase()} name`);
+      if (parent.alt_phone && phoneProblem(parent.alt_phone, locale.countryCode)) return fail('parent.alt_phone', phoneProblem(parent.alt_phone, locale.countryCode)!);
+    }
+    for (let i = 0; i < children.length; i += 1) {
+      const c = children[i];
+      if (!c.name.trim()) return fail(`students.${i}.name`, `Enter the ${labels.student.toLowerCase()} name`);
+      const missing = studentFields.find((f) => bool(f.required) && (c.extra[f.key] === undefined || c.extra[f.key] === ''));
+      if (missing) return fail(`students.${i}.extra.${missing.key}`, `${missing.label} is required`);
+      const noPlan = c.enrollments.findIndex((en) => !en.fee_plan_id);
+      if (noPlan >= 0) return fail(`students.${i}.enrollments.${noPlan}.fee_plan_id`, 'Choose a fee plan');
+      const noAmount = chosenCharges(c).findIndex((x) => !(num(x.amount === '' ? x.item.default_amount : x.amount) >= 1));
+      if (noAmount >= 0) return fail(`students.${i}.charges.${noAmount}.amount`, 'Enter the amount, or untick this charge');
+    }
+    return null;
+  }
+
   function submit(e: FormEvent) {
     e.preventDefault();
+    const problem = check();
+    setErr(problem);
+    if (problem) {
+      requestAnimationFrame(() => document.querySelector('[aria-invalid="true"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const stamp = { created_at: now, updated_at: now, deleted: false };
+    const retry = restored && restored.ids.studentIds.length === children.length && !!restored.existingParentId === !!existingParent ? restored.ids : null;
+    const parentId = existingParent?.id ?? retry?.parentId ?? newId('PAR');
+    const studentIds = retry?.studentIds ?? children.map(() => newId('STU'));
     const payload = {
       enquiry_id: enquiry?.id,
-      parent: existingParent ? { id: existingParent.id } : parent,
-      students: children.map((c) => ({
+      parent: existingParent ? { id: existingParent.id } : { ...parent, new_id: parentId },
+      students: children.map((c, i) => ({
+        new_id: studentIds[i],
         name: c.name,
         class: c.class,
         dob: c.dob,
@@ -143,14 +204,33 @@ export function AdmissionPage() {
         charges: chosenCharges(c).map(({ item, amount }) => ({ charge_item_id: item.id, amount })),
       })),
     };
-    create.mutate(payload, {
-      onSuccess: (res) => {
-        const n = res.student_ids.length;
-        toast(n === 1 ? `${children[0].name} admitted` : `${n} ${labels.students.toLowerCase()} admitted`);
-        const owes = res.changes.FeeDues?.some((d) => num((d as { balance?: unknown }).balance) > 0);
-        navigate(collectNow && owes ? `/fees/${res.parent_id}?pay=1` : `/students/${res.student_ids[0]}`, { replace: true });
+
+    const parentRow: Parent | null = existingParent ? null : {
+      id: parentId, guardian_name: parent.guardian_name.trim(), phone: normalized!, alt_phone: normalizePhone(parent.alt_phone, locale.countryCode) ?? '',
+      email: parent.email, address: parent.address, notes: parent.notes, extra: '', ...stamp,
+    };
+    const students: Student[] = children.map((c, i) => ({
+      id: studentIds[i], parent_id: parentId, name: c.name.trim(), class: c.class, dob: c.dob, gender: '', join_date: todayIso(),
+      status: 'Active', status_reason: '', notes: '', extra: Object.keys(c.extra).length ? JSON.stringify(c.extra) : '', ...stamp,
+    }));
+    const enrollments: Enrollment[] = children.flatMap((c, i) => c.enrollments.map((en) => ({
+      id: tempId(), student_id: studentIds[i], course_id: en.course_id, batch_id: en.batch_id, fee_plan_id: en.fee_plan_id,
+      start_date: en.start_date || todayIso(), end_date: '', monthly_fee_override: en.monthly_fee_override === '' ? '' : num(en.monthly_fee_override), discount_note: '',
+      status: 'Active' as const, status_reason: '', ...stamp,
+    })));
+    const draft = { existingParentId, parent, children, collectNow, enquiryId: enquiry?.id ?? null, ids: { parentId, studentIds } };
+
+    createNow(payload, {
+      show: { Parents: parentRow ? [parentRow] : [], Students: students, Enrollments: enrollments },
+      failure: 'Admission not saved',
+      onError: (error) => {
+        failedAdmission = { ...draft, error };
+        navigate('/admissions/new', { replace: true });
       },
     });
+    const n = children.length;
+    toast(n === 1 ? `${children[0].name.trim()} admitted` : `${n} ${labels.students.toLowerCase()} admitted`);
+    navigate(collectNow && totals.firstBill > 0 ? `/fees/${parentId}?pay=1` : `/students/${studentIds[0]}`, { replace: true });
   }
 
   function chosenCharges(c: ChildDraft) {
@@ -159,7 +239,7 @@ export function AdmissionPage() {
 
   function chooseParent(p: Parent) {
     setExistingParentId(p.id);
-    create.reset();
+    setErr(null);
   }
 
   return (
@@ -329,7 +409,7 @@ export function AdmissionPage() {
         <Plus className="size-4" aria-hidden /> Add sibling
       </Button>
 
-      {err && !shownInline && (
+      {!!err && !shownInline && (
         <div className="mb-4">
           <Alert>
             {errorMessage(err)}
@@ -361,7 +441,7 @@ export function AdmissionPage() {
               </label>
             )}
           </div>
-          <Button type="submit" loading={create.isPending}>
+          <Button type="submit">
             <UserPlus className="size-4" aria-hidden /> Save admission
           </Button>
         </div>

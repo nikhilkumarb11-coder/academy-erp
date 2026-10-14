@@ -1,6 +1,6 @@
 import clsx from 'clsx';
-import { ArrowLeft, ChevronRight, ExternalLink, MessageCircle, Phone, Plus, Share2, Wallet, XCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ArrowLeft, ChevronRight, ExternalLink, Loader2, MessageCircle, Phone, Plus, Share2, Wallet, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Button, Card, EmptyState, Spinner, StatusBadge } from '../../components/ui';
 import type { FeeDue, Payment } from '../../data/types';
@@ -10,7 +10,7 @@ import { byDueOrder, creditOf, dueTitle, isOpenDue } from '../../lib/ledger';
 import { formatPhone } from '../../lib/phone';
 import { isDeleted, num } from '../../lib/values';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
-import { AddChargeSheet, AdjustDueSheet, CancelPaymentSheet, PaymentDoneSheet, RecordPaymentSheet } from './FeeSheets';
+import { AddChargeSheet, AdjustDueSheet, CancelPaymentSheet, usePaymentFlow } from './FeeSheets';
 import { useLogMessages } from '../../data/useMessages';
 import { familyReminder, paymentLines, useMoney, useReceiptActions } from './feeShared';
 
@@ -23,8 +23,7 @@ export function FamilyFeesPage() {
   const receipt = useReceiptActions();
   const logMessages = useLogMessages();
   const { data, isPending } = useCoreData();
-  const [paying, setPaying] = useState(params.get('pay') === '1');
-  const [donePayment, setDonePayment] = useState<string | null>(null);
+  const payment = usePaymentFlow();
   const [adjusting, setAdjusting] = useState<FeeDue | null>(null);
   const [charging, setCharging] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<Payment | null>(null);
@@ -50,6 +49,16 @@ export function FamilyFeesPage() {
     };
   }, [data, parentId]);
 
+  // A new admission is still saving: its dues come from the server, so payment waits for them.
+  const familySaving = !!view && (!!view.parent._pending || view.children.some((c) => c._pending));
+  const found = !!view;
+  const { pay } = payment;
+  useEffect(() => {
+    if (params.get('pay') !== '1' || !found || familySaving) return;
+    pay(parentId);
+    setParams((p) => { p.delete('pay'); return p; }, { replace: true });
+  }, [params, setParams, found, familySaving, pay, parentId]);
+
   if (isPending || !data) return <Spinner />;
   if (!view) {
     return (
@@ -62,10 +71,6 @@ export function FamilyFeesPage() {
   const { t, parent, children, open, settled, payments, credit } = view;
   const outstanding = open.reduce((s, d) => s + num(d.balance), 0);
   const remind = outstanding > 0 ? familyReminder(t, data.settings, tenant.name, parentId) : null;
-  const closePay = () => {
-    setPaying(false);
-    if (params.has('pay')) setParams((p) => { p.delete('pay'); return p; }, { replace: true });
-  };
   const act = (key: string, fn: () => Promise<void>) => async () => {
     setBusy(key);
     await fn();
@@ -117,8 +122,9 @@ export function FamilyFeesPage() {
             {credit > 0 && <p className="text-xs font-medium text-success">{money(credit)} advance</p>}
           </div>
         </div>
+        {familySaving && <p className="mt-3 flex items-center gap-2 text-sm text-muted"><Loader2 className="size-4 animate-spin" aria-hidden /> Saving the admission. Fees appear in a moment.</p>}
         <div className="mt-4 hidden gap-2 sm:flex">
-          <Button onClick={() => setPaying(true)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
+          <Button disabled={familySaving} onClick={() => payment.pay(parentId)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
           {remind && <a href={remind.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'FeeReminder', parent_id: parentId, preview: remind.text }])} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line px-4 text-sm font-medium text-primary hover:bg-primary-soft"><MessageCircle className="size-4" aria-hidden /> Send reminder</a>}
           <Button variant="ghost" onClick={() => setCharging(children[0]?.id ?? '')}><Plus className="size-4" aria-hidden /> Add charge</Button>
         </div>
@@ -170,7 +176,7 @@ export function FamilyFeesPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className={clsx('font-medium tabular-nums', cancelled && 'text-muted line-through')}>{money(num(p.amount))} <span className="text-sm font-normal text-muted">· {p.mode}</span></p>
-                        <p className="text-xs text-muted">{p.receipt_no} · {formatDate(p.paid_at)}</p>
+                        <p className="text-xs text-muted">{p._pending ? 'Saving…' : p.receipt_no} · {formatDate(p.paid_at)}</p>
                         <p className="mt-0.5 break-words text-xs text-muted">
                           {lines.map((l) => [l.title, l.period].filter(Boolean).join(' ')).join(', ') || (cancelled ? '' : 'Advance')}
                         </p>
@@ -178,7 +184,7 @@ export function FamilyFeesPage() {
                       </div>
                       <StatusBadge status={p.status} />
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
+                    <div className={clsx('mt-2 flex flex-wrap gap-1', p._pending && 'hidden')}>
                       {!cancelled && (
                         <Button variant="ghost" className="min-h-9 px-2.5" loading={busy === `share:${p.id}`} onClick={act(`share:${p.id}`, () => receipt.share(p))}>
                           <Share2 className="size-4" aria-hidden /> Share
@@ -202,13 +208,12 @@ export function FamilyFeesPage() {
       </section>
 
       <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 flex gap-2 border-t border-line bg-surface p-3 sm:hidden">
-        <Button className="flex-1" onClick={() => setPaying(true)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
+        <Button className="flex-1" disabled={familySaving} onClick={() => payment.pay(parentId)}><Wallet className="size-4" aria-hidden /> Record payment</Button>
         {remind && <a href={remind.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'FeeReminder', parent_id: parentId, preview: remind.text }])} aria-label="Send reminder on WhatsApp" className="inline-flex min-h-11 items-center rounded-xl border border-line px-3 text-primary"><MessageCircle className="size-5" aria-hidden /></a>}
         <Button variant="secondary" aria-label={`Add a charge for ${labels.student.toLowerCase()}`} onClick={() => setCharging(children[0]?.id ?? '')}><Plus className="size-5" aria-hidden /></Button>
       </div>
 
-      {paying && <RecordPaymentSheet parentId={parentId} onClose={closePay} onRecorded={(id) => { closePay(); setDonePayment(id); }} />}
-      {donePayment && <PaymentDoneSheet paymentId={donePayment} onClose={() => setDonePayment(null)} />}
+      {payment.sheets}
       {adjusting && <AdjustDueSheet due={adjusting} onClose={() => setAdjusting(null)} />}
       {charging !== null && <AddChargeSheet parentId={parentId} studentId={charging || undefined} onClose={() => setCharging(null)} />}
       {cancelling && <CancelPaymentSheet payment={cancelling} onClose={() => setCancelling(null)} />}

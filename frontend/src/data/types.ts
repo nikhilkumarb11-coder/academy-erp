@@ -9,6 +9,8 @@ type SheetNumber = number | '';
 interface Timestamps {
   created_at: string;
   updated_at: string;
+  /** Shown on this device while its save is still on the way to the server (useInstantWrite). */
+  _pending?: boolean;
 }
 
 interface Entity extends Timestamps {
