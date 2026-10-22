@@ -47,6 +47,7 @@ export function FeesPage() {
       if (AGE_BUCKETS.includes(view as AgeBucket) && f.bucket !== view) return false;
       if (!q) return true;
       if (f.guardian.toLowerCase().includes(q) || f.children.some((c) => c.toLowerCase().includes(q))) return true;
+      if (f.courses.some((c) => c.toLowerCase().includes(q))) return true;
       return qDigits.length >= 3 && phoneDigits(f.phone).includes(qDigits);
     });
   }, [families, view, deferredQuery]);
@@ -75,6 +76,7 @@ export function FeesPage() {
           <>
             <ExportButton list="dues" />
             <Button variant="secondary" onClick={() => setGenerating(true)}><CalendarPlus className="size-4" aria-hidden /> Generate dues</Button>
+            <Link to="/fees/by-month" className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-primary-soft">By month</Link>
             <Link to="/payments" className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-primary hover:bg-primary-soft">Payments</Link>
           </>
         }
@@ -102,7 +104,7 @@ export function FeesPage() {
           type="search"
           value={query}
           onChange={(e) => setParam('q', e.target.value)}
-          placeholder={`${labels.guardian}, ${labels.student.toLowerCase()} or phone`}
+          placeholder={`${labels.guardian}, ${labels.student.toLowerCase()}, phone or ${labels.course.toLowerCase()}`}
           className="min-h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-base outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
         />
       </label>
@@ -168,8 +170,8 @@ export function FeesPage() {
 export function Stat({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'success' }) {
   return (
     <Card className="p-3 sm:p-4">
-      <p className="text-xs text-muted">{label}</p>
-      <p className={clsx('mt-1 break-words text-lg font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-danger', tone === 'success' && 'text-success')}>{value}</p>
+      <p className="text-[11px] leading-tight text-muted sm:text-xs">{label}</p>
+      <p className={clsx('mt-1 whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-danger', tone === 'success' && 'text-success')}>{value}</p>
     </Card>
   );
 }

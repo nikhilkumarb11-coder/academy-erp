@@ -1,4 +1,4 @@
-import { Search, UserPlus } from 'lucide-react';
+import { ArrowUpRight, Search, UserPlus } from 'lucide-react';
 import { useDeferredValue, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { ExportButton } from '../../components/ExportButton';
@@ -74,6 +74,9 @@ export function StudentsPage() {
         actions={
           <>
             <ExportButton list="students" />
+            <Button variant="secondary" onClick={() => navigate('/students/upgrade-class')}>
+              <ArrowUpRight className="size-4" aria-hidden /> Upgrade class
+            </Button>
             <Button onClick={() => navigate('/admissions/new')}>
               <UserPlus className="size-4" aria-hidden /> New admission
             </Button>

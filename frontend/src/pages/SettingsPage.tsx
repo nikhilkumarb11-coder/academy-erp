@@ -25,7 +25,6 @@ const PROFILE_FIELDS: { key: string; label: string; hint?: string; type?: string
   { key: 'due_day', label: 'Fee due day of month', hint: 'Monthly dues are due on this day, e.g. 5', inputMode: 'numeric' },
   { key: 'fy_start_month', label: 'Financial year starts in month', hint: '4 = April; receipt numbers restart each year', inputMode: 'numeric' },
   { key: 'country_code', label: 'Default country code', hint: 'Used to format WhatsApp numbers, e.g. 91', inputMode: 'numeric' },
-  { key: 'session_hours', label: 'Login session length (hours)', inputMode: 'numeric' },
 ];
 
 function ProfileSettings() {
@@ -108,7 +107,7 @@ function PasswordSettings() {
   return (
     <Card>
       <h2 className="mb-1 text-lg font-semibold">Change password</h2>
-      <p className="mb-4 text-sm text-muted">All other devices will be logged out.</p>
+      <p className="mb-4 text-sm text-muted">You stay signed in until you log out. Changing the password logs out every other device.</p>
       <form
         onSubmit={(e) => {
           e.preventDefault();

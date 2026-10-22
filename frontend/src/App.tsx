@@ -49,11 +49,13 @@ const CourseMasterPage = page(() => import('./pages/courses/CourseMasterPage'), 
 const EnquiriesPage = page(() => import('./pages/enquiries/EnquiriesPage'), 'EnquiriesPage');
 const ExpensesPage = page(() => import('./pages/expenses/ExpensesPage'), 'ExpensesPage');
 const FamilyFeesPage = page(() => import('./pages/fees/FamilyFeesPage'), 'FamilyFeesPage');
+const FeesByMonthPage = page(() => import('./pages/fees/FeesByMonthPage'), 'FeesByMonthPage');
 const FeesPage = page(() => import('./pages/fees/FeesPage'), 'FeesPage');
 const PaymentsPage = page(() => import('./pages/fees/PaymentsPage'), 'PaymentsPage');
 const ReceiptPage = page(() => import('./pages/fees/ReceiptPage'), 'ReceiptPage');
 const RemindersPage = page(() => import('./pages/reminders/RemindersPage'), 'RemindersPage');
 const ReportsPage = page(() => import('./pages/reports/ReportsPage'), 'ReportsPage');
+const ClassUpgradePage = page(() => import('./pages/students/ClassUpgradePage'), 'ClassUpgradePage');
 const StudentProfilePage = page(() => import('./pages/students/StudentProfilePage'), 'StudentProfilePage');
 const StudentsPage = page(() => import('./pages/students/StudentsPage'), 'StudentsPage');
 
@@ -70,10 +72,12 @@ function AppRoutes() {
       <Route element={<AppShell />}>
         <Route index element={<DashboardPage />} />
         <Route path="students" element={<StudentsPage />} />
+        <Route path="students/upgrade-class" element={<ClassUpgradePage />} />
         <Route path="students/:id" element={<StudentProfilePage />} />
         <Route path="admissions/new" element={<AdmissionPage />} />
         <Route path="courses" element={<CourseMasterPage />} />
         <Route path="fees" element={<FeesPage />} />
+        <Route path="fees/by-month" element={<FeesByMonthPage />} />
         <Route path="fees/:parentId" element={<FamilyFeesPage />} />
         <Route path="payments" element={<PaymentsPage />} />
         <Route path="receipts/:paymentId" element={<ReceiptPage />} />

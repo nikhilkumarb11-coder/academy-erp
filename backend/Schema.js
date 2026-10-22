@@ -82,7 +82,7 @@ const DEFAULT_SETTINGS = {
   fy_start_month: '4',
   due_day: '5',
   receipt_prefix: 'RCPT',
-  session_hours: '12',
+  session_hours: '87600',
   rounding: 'nearest_rupee',
   sibling_discount_pct: '0',
   gateway_fee_as_expense: 'Y',

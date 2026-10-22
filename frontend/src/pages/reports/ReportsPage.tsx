@@ -3,20 +3,23 @@ import { ChevronLeft, ChevronRight, Download, Printer, Settings2 } from 'lucide-
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { ChartCard, Donut, InOutChart } from '../../components/charts';
-import { Button, Card, PageHeader, Spinner } from '../../components/ui';
+import { Button, Card, PageHeader, SelectField, Spinner, StatusBadge } from '../../components/ui';
 import type { CoreData, Settings } from '../../data/types';
 import { brandColor, receiptLogoUrl } from '../../lib/receipt';
 import { useCoreData } from '../../data/useCoreData';
 import { addMonths, formatDate, monthLabel, todayIso } from '../../lib/dates';
+import { duesInMonth } from '../../lib/ledger';
 import { balanceSheet, cashFlow, downloadCsv, fyPeriod, monthPeriod, profitAndLoss, type Line } from '../../lib/finance';
-import { isDeleted, num } from '../../lib/values';
+import { bool, isDeleted, num } from '../../lib/values';
+import { useLabels } from '../../tenant/TenantContext';
 import { useMoney } from '../fees/feeShared';
 import { BalanceItemsSheet } from './BalanceItemsSheet';
 import { ReportsOverview } from './ReportsOverview';
 
-type Tab = 'overview' | 'pl' | 'cash' | 'balance';
+type Tab = 'overview' | 'pl' | 'cash' | 'balance' | 'fees';
 const TABS: { key: Tab; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'fees', label: 'Fee status' },
   { key: 'pl', label: 'Profit & loss' },
   { key: 'cash', label: 'Cash flow' },
   { key: 'balance', label: 'Balance sheet' },
@@ -49,9 +52,97 @@ export function ReportsPage() {
           <ReportsOverview data={data} />
         </>
       )}
+      {tab === 'fees' && <FeeStatus data={data} />}
       {tab === 'pl' && <ProfitLoss data={data} />}
       {tab === 'cash' && <CashFlow data={data} />}
       {tab === 'balance' && <Balance data={data} />}
+    </div>
+  );
+}
+
+function FeeStatus({ data }: { data: CoreData }) {
+  const money = useMoney();
+  const labels = useLabels();
+  const today = todayIso();
+  const thisMonth = today.slice(0, 7);
+  const [month, setMonth] = useState(thisMonth);
+  const [courseId, setCourseId] = useState('');
+  const courses = data.tables.Courses.filter((c) => bool(c.active) && !isDeleted(c)).sort((a, b) => a.name.localeCompare(b.name));
+  const rows = useMemo(() => duesInMonth(data.tables, month, courseId), [data, month, courseId]);
+  const totals = rows.reduce((s, r) => ({ due: s.due + r.amountDue, paid: s.paid + r.paid, balance: s.balance + r.balance }), { due: 0, paid: 0, balance: 0 });
+  const paid = rows.filter((r) => r.balance <= 0).length;
+  const open = rows.length - paid;
+
+  function exportCsv() {
+    downloadCsv(`fee-status-${month}.csv`, [
+      ['Student', 'Parent', 'Course', 'Period', 'Due', 'Paid', 'Balance', 'Status'],
+      ...rows.map((r) => [r.studentName, r.guardian, r.courseName, r.due.period_label, r.amountDue, r.paid, r.balance, r.due.status]),
+      ['Total', '', '', '', totals.due, totals.paid, totals.balance, ''],
+    ]);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3 print:hidden">
+        <Stepper label={monthLabel(month)} onPrev={() => setMonth((m) => addMonths(m, -1))} onNext={() => setMonth((m) => addMonths(m, 1))} nextDisabled={month >= thisMonth} />
+        <SelectField label={labels.course} className="min-w-44 [&>span]:sr-only" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
+          <option value="">All {labels.courses.toLowerCase()}</option>
+          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </SelectField>
+        <ExportButtons className="ml-auto" onCsv={exportCsv} />
+      </div>
+      <p className="hidden text-sm text-muted print:block">{monthLabel(month)}{courseId ? ` · ${courses.find((c) => c.id === courseId)?.name}` : ''}</p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Card className="p-3"><p className="text-xs text-muted">Dues</p><p className="mt-1 font-semibold tabular-nums">{rows.length}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted">Paid</p><p className="mt-1 font-semibold tabular-nums text-success">{paid}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted">Open</p><p className="mt-1 font-semibold tabular-nums">{open}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted">Outstanding</p><p className={clsx('mt-1 whitespace-nowrap font-semibold tabular-nums', totals.balance > 0 && 'text-danger')}>{money(totals.balance)}</p></Card>
+      </div>
+      {rows.length === 0 ? (
+        <Card><p className="text-sm text-muted">No dues for {monthLabel(month)}. Generate dues from Fees & dues first.</p></Card>
+      ) : (
+        <Card className="overflow-x-auto p-0 sm:p-0 print:break-inside-avoid">
+          <table className="w-full min-w-[36rem] text-left text-sm">
+            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
+              <tr>
+                <th className="px-3 py-2.5 font-medium sm:px-4">{labels.student}</th>
+                <th className="px-3 py-2.5 font-medium">{labels.course}</th>
+                <th className="px-3 py-2.5 text-right font-medium">Due</th>
+                <th className="px-3 py-2.5 text-right font-medium">Paid</th>
+                <th className="px-3 py-2.5 text-right font-medium">Balance</th>
+                <th className="px-3 py-2.5 font-medium sm:px-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r) => (
+                <tr key={r.due.id}>
+                  <td className="px-3 py-2.5 sm:px-4">
+                    <p className="font-medium">{r.studentName}</p>
+                    <p className="text-xs text-muted">{r.guardian}</p>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <p>{r.courseName}</p>
+                    <p className="text-xs text-muted">{r.due.period_label}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{money(r.amountDue)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{money(r.paid)}</td>
+                  <td className={clsx('px-3 py-2.5 text-right font-medium tabular-nums', r.balance > 0 && 'text-danger')}>{money(r.balance)}</td>
+                  <td className="px-3 py-2.5 sm:px-4"><StatusBadge status={r.due.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-line font-semibold">
+                <td className="px-3 py-2.5 sm:px-4" colSpan={2}>Total</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.due)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.paid)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.balance)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </Card>
+      )}
     </div>
   );
 }

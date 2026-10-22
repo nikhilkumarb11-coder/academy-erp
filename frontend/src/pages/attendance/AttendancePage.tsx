@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { CalendarOff, CheckCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarOff, CheckCheck, ChevronLeft, ChevronRight, MessageCircle } from 'lucide-react';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
 import { useAuth } from '../../auth/AuthContext';
@@ -12,10 +12,12 @@ import { Alert, Button, Card, EmptyState, Field, PageHeader, SelectField, Spinne
 import { activeCourses, attendanceDayQuery, attendanceMonthQuery, defaultAttendanceCourse, LAST_COURSE } from '../../data/attendance';
 import type { AttendanceMark, AttendanceStatus, CoreTables, Holiday } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
+import { useLogMessages } from '../../data/useMessages';
 import { beginSave, endSave } from '../../data/pending';
 import { useWrite } from '../../data/useWrite';
 import { addDaysIso, addMonths, formatDate, monthLabel, todayIso, weekdayShort } from '../../lib/dates';
 import { bool, isDeleted } from '../../lib/values';
+import { fillMessage, templateText, whatsappUrl } from '../../lib/whatsapp';
 import { useLabels, useTenant } from '../../tenant/TenantContext';
 
 type Mark = AttendanceStatus | '';
@@ -59,7 +61,7 @@ export function AttendancePage() {
       {courses.length === 0 ? (
         <Card><EmptyState title="No courses yet">Add courses and admissions first.</EmptyState></Card>
       ) : tab === 'mark' ? (
-        <MarkTab t={data.tables} courses={courses} />
+        <MarkTab t={data.tables} courses={courses} settings={data.settings} />
       ) : (
         <ReportTab t={data.tables} courses={courses} />
       )}
@@ -67,18 +69,20 @@ export function AttendancePage() {
   );
 }
 
-function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses'] }) {
+function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables['Courses']; settings: Record<string, string> }) {
   const labels = useLabels();
   const tenant = useTenant();
   const { api } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const logMessages = useLogMessages();
   const [params, setParams] = useSearchParams();
   const today = todayIso();
   const courseId = params.get('course') ?? defaultAttendanceCourse(t, tenant.slug);
   const batchId = params.get('batch') ?? '';
   const date = params.get('date') ?? today;
   const [edits, setEdits] = useState<{ key: string; marks: Record<string, Mark> }>({ key: '', marks: {} });
+  const [absentees, setAbsentees] = useState<string[] | null>(null);
   const [holidaySheet, setHolidaySheet] = useState(false);
   const deleteHoliday = useWrite('holidays.delete');
 
@@ -139,8 +143,10 @@ function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses']
     });
     queryClient.setQueryData<DayMarks>(marksKey, (d) => withCourse(d, [...local.values()]));
     localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, courseId);
+    const newlyAbsent = sent.filter(([, m]) => m === 'Absent').map(([id]) => id);
     setEdits({ key: '', marks: {} });
     toast(`Saved: ${counts.Present} present, ${counts.Absent} absent`);
+    if (newlyAbsent.length) setAbsentees(newlyAbsent);
 
     beginSave([]);
     try {
@@ -159,6 +165,20 @@ function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses']
       endSave([]);
     }
   }
+
+  const absentMessage = (studentId: string) => {
+    const student = t.Students.find((s) => s.id === studentId);
+    const parent = t.Parents.find((p) => p.id === student?.parent_id);
+    if (!student || !parent) return null;
+    const text = fillMessage(templateText(t.MessageTemplates, 'Absent'), {
+      parent: parent.guardian_name,
+      student: student.name,
+      course: course?.name ?? '',
+      date: formatDate(date),
+      academy: settings.academy_name || tenant.name,
+    });
+    return { url: whatsappUrl(parent.phone, text), text, parentId: parent.id };
+  };
 
   return (
     <div className="pb-24 lg:pb-0">
@@ -249,6 +269,23 @@ function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses']
             <Button disabled={!loaded} onClick={save}>{loaded ? 'Save attendance' : 'Loading…'}</Button>
           </div>
         </div>
+      )}
+
+      {absentees && (
+        <Sheet open title="Tell parents?" onClose={() => setAbsentees(null)} footer={<div className="flex justify-end"><Button variant="secondary" onClick={() => setAbsentees(null)}>Done</Button></div>}>
+          <p className="mb-3 text-sm text-muted">Send a WhatsApp message to the parents of absent {labels.students.toLowerCase()}.</p>
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {absentees.map((id) => {
+              const msg = absentMessage(id);
+              return (
+                <li key={id} className="flex items-center justify-between gap-3 px-3 py-2">
+                  <span className="font-medium">{t.Students.find((s) => s.id === id)?.name}</span>
+                  {msg && <a href={msg.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'Absent', parent_id: msg.parentId, student_id: id, preview: msg.text }])} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-primary"><MessageCircle className="size-4" aria-hidden /> WhatsApp</a>}
+                </li>
+              );
+            })}
+          </ul>
+        </Sheet>
       )}
 
       {holidaySheet && <HolidaySheet date={date} courseId={courseId} courseName={course?.name ?? ''} onClose={() => setHolidaySheet(false)} />}

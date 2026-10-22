@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { createApiClient, type ApiCall } from '../api/client';
 import { useTenant } from '../tenant/TenantContext';
@@ -70,14 +70,6 @@ export function AuthProvider({ children, onLogout }: { children: ReactNode; onLo
     },
     [api, setSession, queryClient, tenant.slug],
   );
-
-  // Log out on the device when the token's own expiry passes, even if no request is made.
-  useEffect(() => {
-    if (!session) return;
-    const ms = session.expiresAt - Date.now();
-    const timer = setTimeout(() => logout('Your session has expired. Please log in again.'), Math.max(ms, 0));
-    return () => clearTimeout(timer);
-  }, [session, logout]);
 
   const value = useMemo(
     () => ({ session, api, login, logout, setSession, logoutReason }),

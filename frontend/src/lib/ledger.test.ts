@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FeeDue, Payment, PaymentAllocation } from '../data/types';
 import { addDaysIso, addMonths, daysBetween, formatDate, monthLabel } from './dates';
-import { ageBucket, creditOf, fillTemplate, isOpenDue, previewAllocation } from './ledger';
+import { ageBucket, creditOf, dueCoversMonth, fillTemplate, isOpenDue, previewAllocation } from './ledger';
 
 const due = (id: string, due_date: string, balance: number, status: FeeDue['status'] = 'Pending') =>
   ({ id, due_date, balance, status, created_at: '', parent_id: 'P1' }) as unknown as FeeDue;
@@ -39,6 +39,16 @@ describe('ledger', () => {
 
   it('fills templates and leaves unknown placeholders visible', () => {
     expect(fillTemplate('Dear {parent}, ₹{amount} {payment_link}', { parent: 'Ravi', amount: '1,000' })).toBe('Dear Ravi, ₹1,000 {payment_link}');
+  });
+
+  it('matches dues whose period covers a month', () => {
+    const recurring = { kind: 'Recurring', period_start: '2026-10-01', period_end: '2026-12-31', due_date: '2026-10-05' } as FeeDue;
+    expect(dueCoversMonth(recurring, '2026-10')).toBe(true);
+    expect(dueCoversMonth(recurring, '2026-12')).toBe(true);
+    expect(dueCoversMonth(recurring, '2027-01')).toBe(false);
+    const oneTime = { kind: 'OneTime', period_start: '2026-09-01', due_date: '2026-09-15' } as FeeDue;
+    expect(dueCoversMonth(oneTime, '2026-09')).toBe(true);
+    expect(dueCoversMonth(oneTime, '2026-10')).toBe(false);
   });
 });
 

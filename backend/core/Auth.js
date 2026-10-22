@@ -23,12 +23,14 @@ const Auth = (() => {
     Util.setProp('SESSION_VERSION', Number(Util.prop('SESSION_VERSION') || 0) + 1);
   }
 
+  /** Login lasts until Log out (or password change). Expiry is far ahead only as a hard safety net. */
+  const SESSION_MS = 10 * 365.25 * 24 * 3600 * 1000;
+
   function issueToken() {
-    const hours = Number(Db.getMap('Settings').session_hours || 12);
     const payload = {
       role: 'owner',
       sv: Number(Util.prop('SESSION_VERSION') || 1),
-      exp: Date.now() + hours * 3600 * 1000,
+      exp: Date.now() + SESSION_MS,
     };
     const body = Util.base64url(JSON.stringify(payload));
     return { token: `${body}.${Util.hmac(body, Util.prop('TOKEN_SECRET', true))}`, expiresAt: payload.exp };
