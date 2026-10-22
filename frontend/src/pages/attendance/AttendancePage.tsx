@@ -26,6 +26,33 @@ const STATES: { status: AttendanceStatus; short: string; on: string }[] = [
   { status: 'Absent', short: 'A', on: 'border-danger bg-danger text-white' },
 ];
 type DayMarks = { marks: AttendanceMark[] };
+
+/** Course picker with prev/next chevrons (same pattern as the date stepper). */
+function CourseStepper({ courses, courseId, onChange, label }: {
+  courses: { id: string; name: string }[];
+  courseId: string;
+  onChange: (id: string) => void;
+  label: string;
+}) {
+  const i = Math.max(0, courses.findIndex((c) => c.id === courseId));
+  const course = courses[i] ?? courses[0];
+  return (
+    <div className="inline-flex w-full min-w-0 items-center rounded-xl border border-line bg-surface">
+      <button type="button" aria-label={`Previous ${label}`} disabled={i <= 0}
+        className="grid size-11 shrink-0 place-items-center text-muted hover:text-primary disabled:opacity-30"
+        onClick={() => onChange(courses[i - 1].id)}>
+        <ChevronLeft className="size-5" aria-hidden />
+      </button>
+      <span className="min-w-0 flex-1 truncate px-1 text-center font-medium">{course?.name}</span>
+      <button type="button" aria-label={`Next ${label}`} disabled={i >= courses.length - 1}
+        className="grid size-11 shrink-0 place-items-center text-muted hover:text-primary disabled:opacity-30"
+        onClick={() => onChange(courses[i + 1].id)}>
+        <ChevronRight className="size-5" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
 /** Students enrolled in a course on a date (active, started, not ended), optionally one batch. */
 function rosterFor(t: CoreTables, courseId: string, batchId: string, date: string) {
   const students = new Map(t.Students.map((s) => [s.id, s]));
@@ -177,9 +204,15 @@ function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses']
   return (
     <div className="pb-24 lg:pb-0">
       <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-        <SelectField label={labels.course} className="[&>span]:sr-only" value={courseId} onChange={(e) => set('course', e.target.value)}>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SelectField>
+        <CourseStepper
+          courses={courses}
+          courseId={courseId}
+          label={labels.course}
+          onChange={(id) => {
+            localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, id);
+            set('course', id);
+          }}
+        />
         <div className="flex items-center gap-1">
           <button type="button" aria-label="Previous day" className="grid size-11 place-items-center rounded-xl border border-line bg-surface" onClick={() => set('date', addDaysIso(date, -1), today)}>
             <ChevronLeft className="size-5" aria-hidden />
@@ -358,9 +391,15 @@ function RemindTab({ t, courses, settings }: { t: CoreTables; courses: CoreTable
   return (
     <div>
       <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_auto]">
-        <SelectField label={labels.course} className="[&>span]:sr-only" value={courseId} onChange={(e) => set('course', e.target.value)}>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SelectField>
+        <CourseStepper
+          courses={courses}
+          courseId={courseId}
+          label={labels.course}
+          onChange={(id) => {
+            localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, id);
+            set('course', id);
+          }}
+        />
         <div className="flex items-center gap-1">
           <button type="button" aria-label="Previous day" className="grid size-11 place-items-center rounded-xl border border-line bg-surface" onClick={() => set('date', addDaysIso(date, -1), today)}>
             <ChevronLeft className="size-5" aria-hidden />
@@ -492,9 +531,7 @@ function ReportTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses
   return (
     <>
       <div className="mb-4 grid gap-3 sm:grid-cols-2">
-        <SelectField label={labels.course} className="[&>span]:sr-only" value={courseId} onChange={(e) => setCourseId(e.target.value)}>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SelectField>
+        <CourseStepper courses={courses} courseId={courseId} label={labels.course} onChange={setCourseId} />
         <SelectField label="Month" className="[&>span]:sr-only" value={month} onChange={(e) => setMonth(e.target.value)}>
           {Array.from({ length: 12 }, (_, i) => addMonths(thisMonth, -i)).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
         </SelectField>
