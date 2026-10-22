@@ -173,8 +173,8 @@ function FamiliesPanel() {
               <li key={f.parentId} className="rounded-2xl border border-line bg-surface p-4">
                 <div className="flex items-start justify-between gap-3">
                   <Link to={`/fees/${f.parentId}`} className="min-w-0 flex-1">
-                    <p className="break-words font-medium hover:text-primary">{f.guardian}</p>
-                    <p className="break-words text-xs text-muted">{f.children.join(', ')}</p>
+                    <p className="break-words font-medium hover:text-primary">{f.children.join(', ') || f.guardian}</p>
+                    <p className="break-words text-xs text-muted">{f.guardian}</p>
                     {f.courses.length > 0 && <p className="mt-0.5 break-words text-xs text-muted">{f.courses.join(' · ')}</p>}
                   </Link>
                   <div className="text-right">

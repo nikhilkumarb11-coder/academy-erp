@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, MessageCircle, Printer } from 'lucide-react';
+import { ArrowLeft, Download, MessageCircle, Printer, Share2 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Alert, Button, Card, Spinner } from '../../components/ui';
@@ -36,9 +36,12 @@ export function ReceiptPage() {
           <div className="flex flex-wrap gap-2">
             {payment.status === 'Recorded' && (
               <Button variant="secondary" loading={busy === 'wa'} onClick={run('wa', () => receipt.sendWhatsApp(payment))}>
-                <MessageCircle className="size-4" aria-hidden /> WhatsApp
+                <MessageCircle className="size-4" aria-hidden /> Send link
               </Button>
             )}
+            <Button variant="secondary" loading={busy === 'share'} onClick={run('share', () => receipt.share(payment))}>
+              <Share2 className="size-4" aria-hidden /> Share PDF
+            </Button>
             <Button variant="secondary" loading={busy === 'pdf'} onClick={run('pdf', () => receipt.download(payment))}>
               <Download className="size-4" aria-hidden /> Download
             </Button>

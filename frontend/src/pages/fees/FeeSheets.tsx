@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { CheckCircle2, Download, MessageCircle } from 'lucide-react';
+import { CheckCircle2, Download, MessageCircle, Share2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { errorField, fieldError } from '../../api/fieldErrors';
 import { errorMessage } from '../../api/errors';
@@ -272,10 +272,11 @@ export function PaymentDoneSheet({ paymentId, onClose }: { paymentId: string; on
         <p className="mt-1 rounded-full bg-primary-soft px-3 py-1 text-sm font-medium text-primary">{saving ? 'Saving… receipt number in a moment' : `Receipt ${payment.receipt_no}`}</p>
       </div>
       <div className="mt-4 grid gap-2">
-        <Button onClick={run('wa', receipt.sendWhatsApp)} disabled={saving} loading={busy === 'wa'}><MessageCircle className="size-4" aria-hidden /> WhatsApp</Button>
-        <Button variant="secondary" onClick={run('pdf', receipt.download)} disabled={saving} loading={busy === 'pdf'}><Download className="size-4" aria-hidden /> Download</Button>
+        <Button onClick={run('wa', receipt.sendWhatsApp)} disabled={saving} loading={busy === 'wa'}><MessageCircle className="size-4" aria-hidden /> Send link on WhatsApp</Button>
+        <Button variant="secondary" onClick={run('share', receipt.share)} disabled={saving} loading={busy === 'share'}><Share2 className="size-4" aria-hidden /> Share PDF</Button>
+        <Button variant="ghost" onClick={run('pdf', receipt.download)} disabled={saving} loading={busy === 'pdf'}><Download className="size-4" aria-hidden /> Download</Button>
       </div>
-      <p className="mt-3 text-center text-xs text-muted">WhatsApp sends the receipt PDF to the parent. Download saves a copy on this device.</p>
+      <p className="mt-3 text-center text-xs text-muted">Send link opens WhatsApp with a receipt URL. Share PDF uses this phone’s share sheet when available.</p>
     </Sheet>
   );
 }

@@ -61,7 +61,7 @@ interface FailedAdmission {
 let failedAdmission: FailedAdmission | null = null;
 
 function chargeOf(child: ChildDraft, item: ChargeItem) {
-  return child.charges[item.id] ?? { on: true, amount: num(item.default_amount) ? String(num(item.default_amount)) : '' };
+  return child.charges[item.id] ?? { on: false, amount: num(item.default_amount) ? String(num(item.default_amount)) : '' };
 }
 
 export function AdmissionPage() {
