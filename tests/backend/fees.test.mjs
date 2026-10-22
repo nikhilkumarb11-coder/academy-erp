@@ -44,29 +44,32 @@ describe('dues engine', () => {
   let f;
   beforeEach(async () => { f = await family(); });
 
-  it('bills the current month at admission; annual = monthly × 10 × 85%', async () => {
-    assert.equal(f.res.changes.FeeDues.length, 3);
+  it('bills the next month at admission; annual = monthly × 10 × 85%', async () => {
+    assert.equal(f.res.changes.FeeDues.length, 3, 'joining month is never billed; November dues created at admission');
     const annual = f.dueFor('Abacus');
     assert.equal(annual.amount_due, 8500);
-    assert.equal(annual.period_label, 'Oct 2026 – Jul 2027');
-    assert.equal(annual.period_start, '2026-10-13');
-    assert.equal(annual.period_end, '2027-07-31');
-    assert.equal(annual.due_date, '2026-10-13', 'mid-month joiners are due on their start date');
+    assert.equal(annual.period_label, 'Nov 2026 – Aug 2027');
+    assert.equal(annual.period_start, '2026-11-01');
+    assert.equal(annual.period_end, '2027-08-31');
+    assert.equal(annual.due_date, '2026-11-05');
     assert.equal(f.dueFor('Karate').amount_due, 1000);
+    assert.equal(f.dueFor('Karate').period_label, 'Nov 2026');
     assert.equal(f.dueFor('Drawing').status, 'Pending');
+    const oct = await f.be.ok('dues.generate', { month: '2026-10' }, f.token);
+    assert.equal(oct.created, 0, 'joining month is never billed');
   });
 
   it('is idempotent and never re-bills inside an annual period', async () => {
-    await f.at('2026-11-01');
-    const nov = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
-    assert.equal(nov.created, 2, 'Karate and Drawing monthly; Abacus is covered by the annual due');
-    assert.equal(nov.total, 1800);
-    const again = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
+    await f.at('2026-12-01');
+    const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
+    assert.equal(dec.created, 2, 'Karate and Drawing monthly; Abacus is covered by the annual due');
+    assert.equal(dec.total, 1800);
+    const again = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
     assert.equal(again.created, 0);
-    const nextAnnual = await f.be.ok('dues.generate', { month: '2027-08' }, f.token);
-    const abacus = nextAnnual.changes.FeeDues.find((d) => d.period_key === 'A-2027-08');
+    const nextAnnual = await f.be.ok('dues.generate', { month: '2027-09' }, f.token);
+    const abacus = nextAnnual.changes.FeeDues.find((d) => d.period_key === 'A-2027-09');
     assert.equal(abacus.amount_due, 8500);
-    assert.equal(abacus.due_date, '2027-08-05');
+    assert.equal(abacus.due_date, '2027-09-05');
   });
 
   it('skips courses with no fee, and enrollments that are on hold or have not started', async () => {
@@ -80,20 +83,21 @@ describe('dues engine', () => {
     assert.equal(preview.created, 0, 'nothing before the start month');
   });
 
-  it('bills the current month when a student comes back from hold', async () => {
+  it('does not re-bill when a student comes back from hold if the month is already covered', async () => {
     await f.at('2026-11-20');
     await f.be.ok('students.setStatus', { id: f.aarav, status: 'On hold', reason: 'Travel' }, f.token);
     const back = await f.be.ok('students.setStatus', { id: f.aarav, status: 'Active' }, f.token);
-    const keys = back.changes.FeeDues.map((d) => d.period_key).sort();
-    assert.deepEqual(keys, ['M-2026-11'], 'Karate for November; Abacus annual still covers it');
+    assert.equal((back.changes.FeeDues || []).length, 0, 'November was already billed at admission');
   });
 
-  it('starts billing in the start month when admitted in advance', async () => {
+  it('starts billing the month after start when admitted in advance', async () => {
     const g = await family({ start: '2026-12-01', today: '2026-10-20' });
-    assert.equal((g.res.changes.FeeDues || []).length, 0);
+    assert.equal((g.res.changes.FeeDues || []).length, 0, 'first bill month is still beyond the horizon');
     await g.at('2026-12-01');
     const dec = await g.be.ok('dues.generate', { month: '2026-12' }, g.token);
-    assert.equal(dec.created, 3);
+    assert.equal(dec.created, 0, 'joining month itself is not billed');
+    const jan = await g.be.ok('dues.generate', { month: '2027-01' }, g.token);
+    assert.equal(jan.created, 3);
   });
 
   it('adjusts, prorates, waives and removes dues with notes', async () => {
@@ -114,11 +118,11 @@ describe('dues engine', () => {
 
     const removed = await f.be.ok('dues.remove', { id: f.dueFor('Abacus').id, note: 'Wrong plan' }, f.token);
     assert.equal(removed.changes.FeeDues[0].deleted, true);
-    const regen = await f.be.ok('dues.generate', { month: '2026-10' }, f.token);
+    const regen = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
     assert.equal(regen.created, 1, 'a removed due can be generated again');
   });
 
-  it('adds one-time charges, including at admission', async () => {
+  it('adds one-time charges later; admission charges are not stored as dues', async () => {
     const charge = await f.be.ok('dues.addCharge', { student_id: f.diya, label: 'Uniform', amount: 750 }, f.token);
     assert.equal(charge.changes.FeeDues[0].kind, 'OneTime');
     assert.equal(charge.changes.FeeDues[0].period_label, 'Uniform');
@@ -129,8 +133,7 @@ describe('dues engine', () => {
       parent: { id: f.parentId },
       students: [{ name: 'Kabir', charges: [{ charge_item_id: admissionFee.id, amount: 500 }] }],
     }, f.token);
-    assert.equal(res.changes.FeeDues[0].amount_due, 500);
-    assert.equal(res.changes.FeeDues[0].student_id, res.student_ids[0]);
+    assert.ok(!(res.changes.FeeDues || []).some((d) => d.kind === 'OneTime'), 'admission fee is not a pending due');
 
     const bad = await f.be.call('admissions.create', { parent: { id: f.parentId }, students: [{ name: 'X', charges: [{ label: 'Kit', amount: 0 }] }] }, f.token);
     assert.equal(bad.error.details.field, 'students.0.charges.0.amount');
@@ -156,11 +159,11 @@ describe('payments', () => {
     assert.equal(credit.amount, 2000);
     assert.ok(f.dues().every((d) => d.status === 'Paid'));
 
-    await f.at('2026-11-01');
-    const nov = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
-    assert.equal(nov.created, 2);
-    const novDues = f.dues().filter((d) => d.period_key === 'M-2026-11');
-    assert.deepEqual(novDues.map((d) => d.status), ['Paid', 'Paid'], 'the advance pays the new dues');
+    await f.at('2026-12-01');
+    const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
+    assert.equal(dec.created, 2);
+    const decDues = f.dues().filter((d) => d.period_key === 'M-2026-12');
+    assert.deepEqual(decDues.map((d) => d.status), ['Paid', 'Paid'], 'the advance pays the new dues');
     const left = f.be.sheetRows('PaymentAllocations').find((a) => a.id === credit.id);
     assert.equal(left.amount, 200);
   });
@@ -205,8 +208,8 @@ describe('payments', () => {
     assert.ok(f.dues().every((d) => d.status === 'Pending' && d.balance === d.amount_due));
 
     // The 500 credit belonged to the cancelled payment, so new dues stay unpaid.
-    const nov = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
-    assert.ok(nov.changes.FeeDues.every((d) => d.status === 'Pending'));
+    const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
+    assert.ok(dec.changes.FeeDues.every((d) => d.status === 'Pending'));
 
     const again = await f.be.call('payments.cancel', { id: pay.payment_id, reason: 'x' }, f.token);
     assert.equal(again.error.code, 'CONFLICT');

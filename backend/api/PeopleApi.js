@@ -44,12 +44,28 @@ const PeopleApi = (() => {
   }
 
   /**
-   * Bills the current month for enrollments that just started or resumed, so a mid-month admission
-   * does not wait for next month's run. Later start dates are billed by the monthly run.
+   * Creates the first billable month's dues (the month after each enrollment's start month).
+   * Far-future starts wait for the normal monthly generate run.
    */
   function billNewEnrollments(ids) {
     if (!ids.length) return {};
-    return Fees.generate(Util.today().slice(0, 7), { enrollmentIds: ids }).changes;
+    const today = Util.today().slice(0, 7);
+    const horizon = Fees.addMonths(today, 1);
+    const byMonth = {};
+    ids.forEach((id) => {
+      const e = Db.find('Enrollments', id);
+      if (!e || e.status !== 'Active') return;
+      const start = String(e.start_date || '').slice(0, 7);
+      if (!Fees.isMonth(start)) return;
+      const first = Fees.addMonths(start, 1);
+      if (first > horizon) return;
+      (byMonth[first] = byMonth[first] || []).push(id);
+    });
+    const changes = {};
+    Object.keys(byMonth).forEach((month) => {
+      Fees.mergeChanges(changes, Fees.generate(month, { enrollmentIds: byMonth[month] }).changes);
+    });
+    return changes;
   }
 
   /** Validates one enrollment against the catalogue; returns normalized fields. */
@@ -151,9 +167,10 @@ const PeopleApi = (() => {
           seen[clean.course_id] = true;
           return clean;
         });
-        const charges = (Array.isArray(s.charges) ? s.charges : []).map((c, k) => {
+        // Admission charges are validated but not stored as dues — they are optional initial money,
+        // collected as a payment (or skipped), never left pending on Fees & dues.
+        (Array.isArray(s.charges) ? s.charges : []).forEach((c, k) => {
           FeesApi.buildCharge({ id: '', parent_id: '' }, c, `${prefix}.charges.${k}`);
-          return c;
         });
         return {
           student: Object.assign(fields, {
@@ -162,7 +179,6 @@ const PeopleApi = (() => {
             status_reason: '',
           }),
           enrollments,
-          charges,
         };
       });
 
@@ -173,17 +189,14 @@ const PeopleApi = (() => {
         changes.Parents.push(parent);
       }
 
-      const chargeRows = [];
-      prepared.forEach(({ student, enrollments, charges }, i) => {
+      prepared.forEach(({ student, enrollments }, i) => {
         const saved = Db.insert('Students', [Object.assign({ id: newStudentIds[i], parent_id: parent.id }, student)], 'STU')[0];
         changes.Students.push(saved);
         if (enrollments.length) {
           const rows = enrollments.map((e) => Object.assign({ student_id: saved.id, end_date: '', status: 'Active', status_reason: '' }, e));
           changes.Enrollments.push(...Db.insert('Enrollments', rows, 'ENR'));
         }
-        charges.forEach((c, k) => chargeRows.push(FeesApi.buildCharge(saved, c, `students.${i}.charges.${k}`)));
       });
-      Fees.addChanges(changes, 'FeeDues', Db.insert('FeeDues', chargeRows, 'DUE'));
       Fees.mergeChanges(changes, billNewEnrollments(changes.Enrollments.map((e) => e.id)));
       Fees.mergeChanges(changes, Fees.applyCredit(parent.id));
       if (payload.enquiry_id) Fees.addChanges(changes, 'Enquiries', EnquiriesApi.markConverted(String(payload.enquiry_id), changes.Students[0].id));

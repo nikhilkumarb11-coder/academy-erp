@@ -111,33 +111,39 @@ const Fees = (() => {
     return Math.min(28, Math.max(1, Number(Db.getMap('Settings').due_day) || 5));
   }
 
+  /** First month that may be billed: the calendar month after the join month (never the joining month). */
+  function firstBillMonth(enrollment) {
+    const startMonth = monthOf(enrollment.start_date);
+    return isMonth(startMonth) ? addMonths(startMonth, 1) : '';
+  }
+
   /**
    * The period of `enrollment` that contains `month`, or null when the enrollment does not run that month.
+   * Billing never starts in the joining month — the first due is always the following month.
    * `existing` are the enrollment's recurring dues; a period already partly billed (e.g. after a plan change)
    * restarts at `month` instead of overlapping.
    */
   function periodFor(enrollment, plan, month, existing) {
-    const startMonth = monthOf(enrollment.start_date);
-    if (!isMonth(startMonth) || month < startMonth) return null;
+    const billFrom = firstBillMonth(enrollment);
+    if (!isMonth(billFrom) || month < billFrom) return null;
     if (enrollment.end_date && monthOf(enrollment.end_date) < month) return null;
     if (existing.some((d) => monthOf(d.period_start) <= month && month <= monthOf(d.period_end))) return null;
 
     const n = Math.max(1, num(plan.months_covered) || 1);
-    let first = addMonths(startMonth, Math.floor(monthDiff(startMonth, month) / n) * n);
+    let first = addMonths(billFrom, Math.floor(monthDiff(billFrom, month) / n) * n);
     let last = addMonths(first, n - 1);
     if (existing.some((d) => monthOf(d.period_start) <= last && first <= monthOf(d.period_end))) {
       first = month;
       last = addMonths(month, n - 1);
     }
-    const isFirst = first === startMonth;
     return {
       first,
       last,
       key: `${FREQ_LETTER[plan.frequency] || 'P'}-${first}`,
       label: n === 1 ? monthLabel(first) : `${monthLabel(first)} – ${monthLabel(last)}`,
-      start: isFirst ? String(enrollment.start_date).slice(0, 10) : `${first}-01`,
+      start: `${first}-01`,
       end: `${last}-${String(daysIn(last)).padStart(2, '0')}`,
-      isFirst,
+      isFirst: first === billFrom,
     };
   }
 
@@ -177,8 +183,6 @@ const Fees = (() => {
       if (fee === null) return skipped.push(Object.assign(label, { reason: 'No monthly fee set' }));
 
       const amount = planAmount(fee, plan);
-      let dueDate = `${period.first}-${day}`;
-      if (period.isFirst && period.start > dueDate) dueDate = period.start;
       rows.push({
         kind: 'Recurring',
         enrollment_id: e.id,
@@ -195,7 +199,7 @@ const Fees = (() => {
         amount_paid: 0,
         balance: amount,
         prorated: false,
-        due_date: dueDate,
+        due_date: `${period.first}-${day}`,
         status: amount > 0 ? 'Pending' : 'Paid',
         notes: e.discount_note || '',
       });

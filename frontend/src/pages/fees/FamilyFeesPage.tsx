@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { ArrowLeft, ChevronRight, ExternalLink, Loader2, MessageCircle, Phone, Plus, Share2, Wallet, XCircle } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Download, Loader2, MessageCircle, Phone, Plus, Wallet, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { Button, Card, EmptyState, Spinner, StatusBadge } from '../../components/ui';
@@ -186,12 +186,12 @@ export function FamilyFeesPage() {
                     </div>
                     <div className={clsx('mt-2 flex flex-wrap gap-1', p._pending && 'hidden')}>
                       {!cancelled && (
-                        <Button variant="ghost" className="min-h-9 px-2.5" loading={busy === `share:${p.id}`} onClick={act(`share:${p.id}`, () => receipt.share(p))}>
-                          <Share2 className="size-4" aria-hidden /> Share
+                        <Button variant="ghost" className="min-h-9 px-2.5" loading={busy === `wa:${p.id}`} onClick={act(`wa:${p.id}`, () => receipt.sendWhatsApp(p))}>
+                          <MessageCircle className="size-4" aria-hidden /> WhatsApp
                         </Button>
                       )}
-                      <Button variant="ghost" className="min-h-9 px-2.5" loading={busy === `open:${p.id}`} onClick={act(`open:${p.id}`, () => receipt.open(p))}>
-                        <ExternalLink className="size-4" aria-hidden /> Receipt
+                      <Button variant="ghost" className="min-h-9 px-2.5" loading={busy === `pdf:${p.id}`} onClick={act(`pdf:${p.id}`, () => receipt.download(p))}>
+                        <Download className="size-4" aria-hidden /> Download
                       </Button>
                       {!cancelled && (
                         <Button variant="ghost" className="min-h-9 px-2.5 text-danger hover:bg-danger/5" onClick={() => setCancelling(p)}>

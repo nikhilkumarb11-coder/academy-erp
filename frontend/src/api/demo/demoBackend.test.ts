@@ -26,7 +26,7 @@ describe('demo backend (real backend code in the browser runtime)', () => {
     const boot = call<Record<string, unknown[]>>('system.bootstrap');
     expect(boot.Parents).toHaveLength(12);
     expect(boot.Students.length).toBeGreaterThan(15);
-    expect(boot.FeeDues.length).toBeGreaterThan(30);
+    expect(boot.FeeDues.length).toBeGreaterThan(20);
     expect(boot.Payments.length).toBeGreaterThan(8);
     const open = (boot.FeeDues as { balance: number }[]).filter((d) => d.balance > 0);
     expect(open.length).toBeGreaterThan(0);

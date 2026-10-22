@@ -135,16 +135,17 @@ export function AdmissionPage() {
         const fee = monthlyFeeFor(course, { monthly_fee_override: e.monthly_fee_override === '' ? '' : num(e.monthly_fee_override) });
         acc.courses += 1;
         if (fee === null || !plan) acc.unpriced += 1;
-        else acc.firstBill += planAmount(fee, plan);
+        else acc.courseFees += planAmount(fee, plan);
       });
       admissionItems.forEach((item) => {
         const ch = chargeOf(c, item);
-        if (ch.on) acc.firstBill += num(ch.amount);
+        if (ch.on) acc.admissionFees += num(ch.amount);
       });
       return acc;
     },
-    { courses: 0, firstBill: 0, unpriced: 0 },
+    { courses: 0, courseFees: 0, admissionFees: 0, unpriced: 0 },
   );
+  const collectTotal = totals.courseFees + totals.admissionFees;
 
   const childErr = (i: number, field: string) => fieldError(err, `students.${i}.${field}`);
   const conflictParentId = err instanceof ApiError && err.code === 'CONFLICT' ? (err.details as { parent_id?: string } | undefined)?.parent_id : undefined;
@@ -230,7 +231,7 @@ export function AdmissionPage() {
     });
     const n = children.length;
     toast(n === 1 ? `${children[0].name.trim()} admitted` : `${n} ${labels.students.toLowerCase()} admitted`);
-    navigate(collectNow && totals.firstBill > 0 ? `/fees/${parentId}?pay=1` : `/students/${studentIds[0]}`, { replace: true });
+    navigate(collectNow && collectTotal > 0 ? `/fees/${parentId}?pay=1` : `/students/${studentIds[0]}`, { replace: true });
   }
 
   function chosenCharges(c: ChildDraft) {
@@ -394,6 +395,7 @@ export function AdmissionPage() {
 
           {admissionItems.length > 0 && (
             <div className="mt-4 space-y-2">
+              <p className="text-xs text-muted">Optional money collected at joining — not left as a pending due.</p>
               {admissionItems.map((item) => {
                 const ch = chargeOf(child, item);
                 const k = chosenCharges(child).findIndex((x) => x.item.id === item.id);
@@ -437,13 +439,15 @@ export function AdmissionPage() {
             <p className="font-medium">
               {children.length} {children.length === 1 ? 'child' : 'children'} · {totals.courses} {totals.courses === 1 ? labels.course.toLowerCase() : labels.courses.toLowerCase()}
             </p>
-            {(totals.courses > 0 || totals.firstBill > 0) && (
+            {(totals.courses > 0 || collectTotal > 0) && (
               <p className="text-xs text-muted">
-                First bill {formatMoney(totals.firstBill, locale.currencySymbol)}
+                {totals.courseFees > 0 && <>Next month {formatMoney(totals.courseFees, locale.currencySymbol)}</>}
+                {totals.courseFees > 0 && totals.admissionFees > 0 && ' · '}
+                {totals.admissionFees > 0 && <>Admission {formatMoney(totals.admissionFees, locale.currencySymbol)}</>}
                 {totals.unpriced > 0 && <span className="text-warning"> · {totals.unpriced} without a fee</span>}
               </p>
             )}
-            {totals.firstBill > 0 && (
+            {collectTotal > 0 && (
               <label className="mt-1 inline-flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={collectNow} onChange={(e) => setCollectNow(e.target.checked)} className="size-4 accent-[var(--tenant-primary)]" />
                 Collect payment after saving

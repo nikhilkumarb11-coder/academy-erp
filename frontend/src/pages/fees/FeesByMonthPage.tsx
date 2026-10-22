@@ -1,16 +1,17 @@
 import clsx from 'clsx';
-import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Wallet } from 'lucide-react';
 import { useDeferredValue, useMemo } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
 import { FeeSearch } from '../../components/FeeSearch';
 import { Button, Card, EmptyState, Spinner, StatusBadge } from '../../components/ui';
 import { useCoreData } from '../../data/useCoreData';
+import { useLogMessages } from '../../data/useMessages';
 import { addMonths, monthLabel, todayIso } from '../../lib/dates';
 import { duesInMonth, type MonthDueRow } from '../../lib/ledger';
 import { phoneDigits } from '../../lib/phone';
 import { bool, isDeleted } from '../../lib/values';
-import { useLabels } from '../../tenant/TenantContext';
-import { Stat, useMoney } from './feeShared';
+import { useLabels, useTenant } from '../../tenant/TenantContext';
+import { dueReminder, Stat, useMoney } from './feeShared';
 
 type StatusFilter = 'pending' | 'paid' | 'all';
 
@@ -24,8 +25,10 @@ export function FeesByMonthPage() {
 
 export function FeesByMonthPanel() {
   const labels = useLabels();
+  const tenant = useTenant();
   const money = useMoney();
   const navigate = useNavigate();
+  const logMessages = useLogMessages();
   const { data, isPending } = useCoreData();
   const [params, setParams] = useSearchParams();
   const thisMonth = todayIso().slice(0, 7);
@@ -64,6 +67,16 @@ export function FeesByMonthPanel() {
       return qDigits.length >= 3 && phoneDigits(phone).includes(qDigits);
     });
   }, [data, allRows, status, deferredQuery]);
+
+  const courseGroups = useMemo(() => {
+    const map = new Map<string, MonthDueRow[]>();
+    rows.forEach((r) => {
+      const list = map.get(r.courseName) ?? [];
+      list.push(r);
+      map.set(r.courseName, list);
+    });
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows]);
 
   if (isPending || !data) return <Spinner />;
 
@@ -141,53 +154,62 @@ export function FeesByMonthPanel() {
         </Card>
       ) : rows.length === 0 ? (
         <Card><EmptyState title="No matches">Try another status, course or search.</EmptyState></Card>
-      ) : status === 'all' ? (
-        <div className="space-y-6">
-          <DueSection title="Still to collect" rows={rows.filter((r) => r.balance > 0)} money={money} empty="Everyone in this filter has paid." onCollect={(id) => navigate(`/fees/${id}?pay=1`)} />
-          <DueSection title="Fully paid" rows={rows.filter((r) => r.balance <= 0)} money={money} empty="No paid dues in this filter." />
-        </div>
       ) : (
-        <ul className="space-y-2">
-          {rows.map((r) => <DueCard key={r.due.id} row={r} money={money} onCollect={r.balance > 0 ? () => navigate(`/fees/${r.parentId}?pay=1`) : undefined} />)}
-        </ul>
+        <div className="space-y-6">
+          {courseGroups.map(([courseName, group]) => {
+            const owed = group.reduce((s, r) => s + r.balance, 0);
+            const groupTotal = status === 'paid'
+              ? group.reduce((s, r) => s + r.amountDue, 0)
+              : owed;
+            return (
+              <section key={courseName}>
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{courseName}</h2>
+                  <p className={clsx('text-sm font-medium tabular-nums', owed > 0 ? 'text-danger' : 'text-muted')}>
+                    {money(groupTotal)}
+                    <span className="ml-1 font-normal text-muted">· {group.length}</span>
+                  </p>
+                </div>
+                <ul className="space-y-2">
+                  {group.map((r) => {
+                    const remind = r.balance > 0 ? dueReminder(data.tables, data.settings, tenant.name, r.due) : null;
+                    return (
+                      <DueCard
+                        key={r.due.id}
+                        row={r}
+                        money={money}
+                        onCollect={r.balance > 0 ? () => navigate(`/fees/${r.parentId}?pay=1`) : undefined}
+                        remind={remind}
+                        onRemind={() => {
+                          if (!remind) return;
+                          logMessages([{ type: 'FeeReminder', parent_id: remind.parentId, preview: remind.text }]);
+                        }}
+                      />
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
       )}
     </>
   );
 }
 
-function DueSection({ title, rows, money, empty, onCollect }: {
-  title: string;
-  rows: MonthDueRow[];
+function DueCard({ row: r, money, onCollect, remind, onRemind }: {
+  row: MonthDueRow;
   money: (n: number) => string;
-  empty: string;
-  onCollect?: (parentId: string) => void;
+  onCollect?: () => void;
+  remind?: { url: string } | null;
+  onRemind?: () => void;
 }) {
-  const subtotal = rows.reduce((s, r) => s + r.balance, 0);
-  return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
-        {rows.length > 0 && subtotal > 0 && <p className="text-sm font-medium tabular-nums text-danger">{money(subtotal)}</p>}
-        {rows.length > 0 && subtotal <= 0 && <p className="text-sm text-muted">{rows.length}</p>}
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted">{empty}</p>
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((r) => <DueCard key={r.due.id} row={r} money={money} onCollect={onCollect ? () => onCollect(r.parentId) : undefined} />)}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function DueCard({ row: r, money, onCollect }: { row: MonthDueRow; money: (n: number) => string; onCollect?: () => void }) {
   return (
     <li className="rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <Link to={`/fees/${r.parentId}`} className="font-medium hover:text-primary">{r.studentName}</Link>
-          <p className="text-xs text-muted">{r.guardian} · {r.courseName}</p>
+          <p className="text-xs text-muted">{r.guardian}</p>
           <p className="mt-0.5 text-xs text-muted">{r.due.period_label}</p>
         </div>
         <div className="text-right">
@@ -197,9 +219,22 @@ function DueCard({ row: r, money, onCollect }: { row: MonthDueRow; money: (n: nu
           <StatusBadge status={r.due.status} />
         </div>
       </div>
-      {onCollect && (
-        <div className="mt-3">
-          <Button className="min-h-10 w-full sm:w-auto" onClick={onCollect}><Wallet className="size-4" aria-hidden /> Collect</Button>
+      {(onCollect || remind) && (
+        <div className="mt-3 flex gap-2">
+          {onCollect && (
+            <Button className="min-h-10 flex-1" onClick={onCollect}><Wallet className="size-4" aria-hidden /> Collect</Button>
+          )}
+          {remind && (
+            <a
+              href={remind.url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={onRemind}
+              className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-sm font-medium text-primary hover:bg-primary-soft"
+            >
+              <MessageCircle className="size-4" aria-hidden /> Remind
+            </a>
+          )}
         </div>
       )}
     </li>

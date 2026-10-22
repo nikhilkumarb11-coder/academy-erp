@@ -1,20 +1,16 @@
 import clsx from 'clsx';
-import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
-import { useAuth } from '../../auth/AuthContext';
 import { errorMessage } from '../../api/errors';
 import { useToast } from '../../components/Toast';
 import { Card } from '../../components/ui';
-import type { CoreData, CoreTables, Payment, Settings } from '../../data/types';
-import { applyChanges, type Changes } from '../../data/merge';
-import { coreKey, useCoreData } from '../../data/useCoreData';
+import type { CoreTables, FeeDue, Payment, Settings } from '../../data/types';
+import { useCoreData } from '../../data/useCoreData';
 import { useLogMessages } from '../../data/useMessages';
 import { formatMoney } from '../../lib/fees';
 import { byId, groupBy } from '../../lib/indexes';
 import { byDueOrder, dueTitle, isOpenDue } from '../../lib/ledger';
 import { receiptFileName, receiptHtml, receiptLogoUrl } from '../../lib/receipt';
-import { buildReceiptPdf, fileToBase64, logoDataUri } from '../../lib/receiptPdf';
-import { tenantBasePath } from '../../tenant/loadTenant';
+import { buildReceiptPdf, logoDataUri } from '../../lib/receiptPdf';
 import { useTenant } from '../../tenant/TenantContext';
 import { amountText, fillMessage, templateText, whatsappUrl } from '../../lib/whatsapp';
 import { monthLabel, todayIso } from '../../lib/dates';
@@ -34,12 +30,6 @@ export function Stat({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-interface ReceiptResult {
-  changes: Changes;
-  receipt_no: string;
-  url: string;
-}
-
 interface PreparedPdf {
   promise: Promise<File>;
   file?: File;
@@ -47,10 +37,6 @@ interface PreparedPdf {
 
 /** PDFs built on this device, per payment version, so a later tap shares without waiting. */
 const pdfs = new Map<string, PreparedPdf>();
-/** Drive links being created, per payment version, so one payment never uploads twice. */
-const links = new Map<string, Promise<string>>();
-
-const receiptStatus = (payment: Payment) => (payment.status === 'Cancelled' ? 'Cancelled' : 'Active');
 
 /** Lines of a payment: which child, course and period it paid. */
 export function paymentLines(t: CoreTables, payment: Payment) {
@@ -71,21 +57,16 @@ export async function receiptPdf(t: CoreTables, settings: Settings, payment: Pay
 }
 
 /**
- * Receipt actions (PRD §6.5). The receipt and its PDF are made on this device from cached data, so
- * opening and sharing need no server call. Only "Send link" needs a Drive copy: it is uploaded once
- * (ahead of time from the payment sheet) and its link is kept in the Receipts table.
- * Browsers only allow pop-ups and the share sheet straight after a tap: the WhatsApp tab is opened
- * before any wait, and the PDF is usually ready before the tap.
+ * Receipt actions (PRD §6.5). The receipt PDF is made on this device from cached data.
+ * WhatsApp sends the PDF to the parent (share sheet when the browser allows file share;
+ * otherwise downloads the PDF and opens the parent's WhatsApp chat). No Drive "Send link".
  */
 export function useReceiptActions() {
   const tenant = useTenant();
-  const { api } = useAuth();
   const { data } = useCoreData();
-  const queryClient = useQueryClient();
   const toast = useToast();
   const navigate = useNavigate();
   const logMessages = useLogMessages();
-  const isDemo = tenant.apiUrl === 'mock';
 
   const versionKey = (payment: Payment) => `${tenant.slug}:${payment.id}:${payment.status}:${payment.receipt_no}:${payment.updated_at}`;
 
@@ -106,27 +87,7 @@ export function useReceiptActions() {
     return entry;
   }
 
-  /** The receipt's Drive link: from the Receipts table when uploaded already, else uploads this device's PDF. */
-  function linkFor(payment: Payment): Promise<string> {
-    if (isDemo) return Promise.resolve(`${window.location.origin}${tenantBasePath(tenant.slug)}/receipts/${payment.id}`);
-    const stored = data?.tables.Receipts.find((r) => r.payment_id === payment.id && r.status === receiptStatus(payment) && r.drive_url);
-    if (stored) return Promise.resolve(stored.drive_url);
-    const key = versionKey(payment);
-    let pending = links.get(key);
-    if (!pending) {
-      pending = (async () => {
-        const pdf = await fileToBase64(await pdfEntry(payment).promise);
-        const res = await api<ReceiptResult>('receipts.get', { payment_id: payment.id, pdf });
-        if (res.changes) queryClient.setQueryData<CoreData>(coreKey(tenant.slug), (old) => (old ? applyChanges(old, res.changes) : old));
-        return res.url;
-      })();
-      pending.catch(() => links.delete(key));
-      links.set(key, pending);
-    }
-    return pending;
-  }
-
-  function message(payment: Payment, receiptLink: string) {
+  function message(payment: Payment) {
     const t = data?.tables;
     if (!t) return '';
     const parent = byId(t.Parents).get(payment.parent_id);
@@ -140,25 +101,9 @@ export function useReceiptActions() {
       amount: amountText(num(payment.amount)),
       balance: amountText(balance),
       receipt_no: payment.receipt_no,
-      receipt_link: receiptLink,
+      receipt_link: '',
       academy: data?.settings.academy_name || tenant.name,
     });
-  }
-
-  async function sendWhatsApp(payment: Payment) {
-    const tab = window.open('', '_blank');
-    try {
-      const url = await linkFor(payment);
-      const phone = data?.tables.Parents.find((p) => p.id === payment.parent_id)?.phone ?? '';
-      const text = message(payment, url);
-      const wa = whatsappUrl(phone, text);
-      logMessages([{ type: 'Receipt', parent_id: payment.parent_id, preview: text }]);
-      if (tab) tab.location.href = wa;
-      else window.location.href = wa;
-    } catch (err) {
-      tab?.close();
-      toast(errorMessage(err), 'error');
-    }
   }
 
   function saveFile(file: File) {
@@ -172,39 +117,29 @@ export function useReceiptActions() {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
-  /** Shares the PDF itself (no Drive link); where files cannot be shared, downloads it instead. */
-  async function shareNow(payment: Payment, file: File) {
-    if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], text: message(payment, ''), title: `Receipt ${payment.receipt_no}` });
-      return;
-    }
-    saveFile(file);
-    toast('Receipt PDF downloaded. Attach it in WhatsApp to send.', 'success');
-  }
-
-  /**
-   * Shares the receipt as a PDF file. The PDF takes well under a second on the device; should the
-   * browser still refuse the share sheet after the wait, the PDF is kept and the next tap shares it.
-   */
-  async function share(payment: Payment) {
+  /** WhatsApp to the parent with the receipt PDF (no Drive link). */
+  async function sendWhatsApp(payment: Payment) {
     try {
-      const entry = pdfEntry(payment);
-      if (entry.file) {
-        await shareNow(payment, entry.file);
-        return;
-      }
-      const file = await entry.promise;
-      try {
-        await shareNow(payment, file);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'NotAllowedError') {
-          toast('Receipt is ready. Tap Share again to send it.', 'success');
+      const file = await pdfEntry(payment).promise;
+      const phone = data?.tables.Parents.find((p) => p.id === payment.parent_id)?.phone ?? '';
+      const text = message(payment);
+      logMessages([{ type: 'Receipt', parent_id: payment.parent_id, preview: text }]);
+      if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], text, title: `Receipt ${payment.receipt_no}` });
           return;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          if (err instanceof DOMException && err.name === 'NotAllowedError') {
+            toast('Receipt is ready. Tap WhatsApp again to send it.', 'success');
+            return;
+          }
         }
-        throw err;
       }
+      saveFile(file);
+      window.open(whatsappUrl(phone, text), '_blank', 'noopener');
+      toast('Receipt PDF downloaded. Attach it in WhatsApp.', 'success');
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
       toast(errorMessage(err), 'error');
     }
   }
@@ -221,11 +156,11 @@ export function useReceiptActions() {
     navigate(`/receipts/${payment.id}`);
   }
 
-  /** Builds the PDF ahead of a likely Share tap, then uploads it so "Send link" is instant too. */
+  /** Builds the PDF ahead of a likely WhatsApp / Download tap. */
   function warmUp(payment: Payment) {
     const run = () => {
       try {
-        pdfEntry(payment).promise.then(() => linkFor(payment)).catch(() => {});
+        pdfEntry(payment).promise.catch(() => {});
       } catch {
         // data still loading: the tap builds it
       }
@@ -234,7 +169,7 @@ export function useReceiptActions() {
     else setTimeout(run, 300);
   }
 
-  return { share, sendWhatsApp, open, download, warmUp };
+  return { sendWhatsApp, open, download, warmUp };
 }
 
 export interface FamilyReminder {
@@ -266,4 +201,25 @@ export function familyReminder(t: CoreTables, settings: Record<string, string>, 
     academy_phone: settings.academy_phone ?? '',
   });
   return { parentId, phone: parent.phone, text, url: whatsappUrl(parent.phone, text) };
+}
+
+/** WhatsApp reminder for a single open due (Fees → By month rows). */
+export function dueReminder(t: CoreTables, settings: Record<string, string>, academy: string, due: FeeDue, template?: string): FamilyReminder | null {
+  if (!isOpenDue(due)) return null;
+  const parent = byId(t.Parents).get(due.parent_id);
+  if (!parent) return null;
+  const student = byId(t.Students).get(due.student_id);
+  const { title, period } = dueTitle(t, due);
+  const balance = num(due.balance);
+  const text = fillMessage(template ?? templateText(t.MessageTemplates, 'FeeReminder'), {
+    parent: parent.guardian_name,
+    student: student?.name ?? '',
+    course: title,
+    month: period || monthLabel(todayIso().slice(0, 7)),
+    amount: amountText(balance),
+    balance: amountText(balance),
+    academy: settings.academy_name || academy,
+    academy_phone: settings.academy_phone ?? '',
+  });
+  return { parentId: parent.id, phone: parent.phone, text, url: whatsappUrl(parent.phone, text) };
 }
