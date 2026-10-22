@@ -1,10 +1,11 @@
 /**
  * Dues engine (PRD §6.3, addendum G8). Callers must hold Db.withLock.
  *
- * A recurring due covers one fee-plan period of an enrollment: months_covered months starting at the
- * enrollment's start month (period k starts at start + k × months_covered). Generating dues for a month
- * creates the period containing that month unless an existing due of the enrollment already covers it,
- * so running it twice, or after an annual payment, never bills twice (PRD rule 4).
+ * A recurring due covers one fee-plan period of an enrollment. Billing never starts in the joining
+ * month — the first period begins the calendar month after start_date. Generating dues for a month
+ * creates the period containing that month unless an existing due already covers it, so running it
+ * twice (or after an annual payment) never bills twice (PRD rule 4). Future months are not billed
+ * early: a due only appears once that month has arrived.
  *
  * Money lives in three places: FeeDues (what is owed), Payments (what came in) and PaymentAllocations
  * (which payment paid which due). An allocation with a blank due_id is unspent credit (an advance);
@@ -120,12 +121,15 @@ const Fees = (() => {
   /**
    * The period of `enrollment` that contains `month`, or null when the enrollment does not run that month.
    * Billing never starts in the joining month — the first due is always the following month.
+   * Future months are not billed until they arrive (`month` must be ≤ today).
    * `existing` are the enrollment's recurring dues; a period already partly billed (e.g. after a plan change)
    * restarts at `month` instead of overlapping.
    */
   function periodFor(enrollment, plan, month, existing) {
     const billFrom = firstBillMonth(enrollment);
     if (!isMonth(billFrom) || month < billFrom) return null;
+    const todayMonth = monthOf(Util.today());
+    if (isMonth(todayMonth) && month > todayMonth) return null;
     if (enrollment.end_date && monthOf(enrollment.end_date) < month) return null;
     if (existing.some((d) => monthOf(d.period_start) <= month && month <= monthOf(d.period_end))) return null;
 
@@ -148,12 +152,44 @@ const Fees = (() => {
   }
 
   /**
+   * Soft-deletes unpaid recurring dues that should never have existed: periods before the first
+   * billable month (joining-month dues), or periods still in the future.
+   */
+  function dropPrematureDues() {
+    const todayMonth = monthOf(Util.today());
+    const enrollments = new Map(Db.all('Enrollments').map((e) => [e.id, e]));
+    const patches = [];
+    Db.all('FeeDues').forEach((d) => {
+      if (d.kind !== 'Recurring' || !d.enrollment_id || num(d.amount_paid) > 0) return;
+      const e = enrollments.get(d.enrollment_id);
+      if (!e) return;
+      const first = firstBillMonth(e);
+      if (!isMonth(first)) return;
+      const period = monthOf(d.period_start);
+      if (!isMonth(period)) return;
+      if (period < first || (isMonth(todayMonth) && period > todayMonth)) {
+        const note = period < first
+          ? 'Removed: billing starts the month after joining'
+          : 'Removed: dues are not created before their month';
+        const line = `${Util.today()}: ${note}`;
+        patches.push({ id: d.id, deleted: true, notes: d.notes ? `${d.notes}\n${line}` : line });
+      }
+    });
+    if (!patches.length) return {};
+    const changes = {};
+    addChanges(changes, 'FeeDues', Db.update('FeeDues', patches));
+    return changes;
+  }
+
+  /**
    * Creates the dues for `month`. Options: enrollmentIds (limit to these), dryRun (compute only).
    * Returns { created, skipped: [{ enrollment_id, student, course, reason }], changes }.
    */
   function generate(month, opts) {
     const options = opts || {};
     if (!isMonth(month)) throw new AppError('VALIDATION', 'Month must look like 2026-06', { field: 'month' });
+
+    const changes = options.dryRun ? {} : dropPrematureDues();
 
     const only = options.enrollmentIds ? new Set(options.enrollmentIds) : null;
     const students = new Map(Db.all('Students').map((s) => [s.id, s]));
@@ -205,7 +241,6 @@ const Fees = (() => {
       });
     });
 
-    const changes = {};
     if (options.dryRun) return { created: rows, skipped, changes };
 
     const created = Db.insert('FeeDues', rows, 'DUE');
@@ -275,6 +310,6 @@ const Fees = (() => {
   return {
     monthOf, addMonths, monthDiff, monthLabel, isMonth, daysIn,
     num, monthlyFee, planAmount, net, settle, isOpen, byDueOrder,
-    addChanges, mergeChanges, periodFor, generate, creditOf, applyCredit,
+    addChanges, mergeChanges, firstBillMonth, periodFor, dropPrematureDues, generate, creditOf, applyCredit,
   };
 })();

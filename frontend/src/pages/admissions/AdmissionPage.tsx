@@ -441,7 +441,7 @@ export function AdmissionPage() {
             </p>
             {(totals.courses > 0 || collectTotal > 0) && (
               <p className="text-xs text-muted">
-                {totals.courseFees > 0 && <>Next month {formatMoney(totals.courseFees, locale.currencySymbol)}</>}
+                {totals.courseFees > 0 && <>Next month’s fees {formatMoney(totals.courseFees, locale.currencySymbol)} (from next month)</>}
                 {totals.courseFees > 0 && totals.admissionFees > 0 && ' · '}
                 {totals.admissionFees > 0 && <>Admission {formatMoney(totals.admissionFees, locale.currencySymbol)}</>}
                 {totals.unpriced > 0 && <span className="text-warning"> · {totals.unpriced} without a fee</span>}
@@ -450,7 +450,7 @@ export function AdmissionPage() {
             {collectTotal > 0 && (
               <label className="mt-1 inline-flex items-center gap-2 text-xs">
                 <input type="checkbox" checked={collectNow} onChange={(e) => setCollectNow(e.target.checked)} className="size-4 accent-[var(--tenant-primary)]" />
-                Collect payment after saving
+                Collect payment after saving{totals.courseFees > 0 && totals.admissionFees === 0 ? ' (as advance)' : ''}
               </label>
             )}
           </div>

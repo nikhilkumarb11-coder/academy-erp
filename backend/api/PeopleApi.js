@@ -44,13 +44,12 @@ const PeopleApi = (() => {
   }
 
   /**
-   * Creates the first billable month's dues (the month after each enrollment's start month).
-   * Far-future starts wait for the normal monthly generate run.
+   * Creates the first billable month's dues once that month has arrived (the month after join).
+   * Joining-month admissions create no dues yet — they appear on the 1st (or the next generate).
    */
   function billNewEnrollments(ids) {
     if (!ids.length) return {};
     const today = Util.today().slice(0, 7);
-    const horizon = Fees.addMonths(today, 1);
     const byMonth = {};
     ids.forEach((id) => {
       const e = Db.find('Enrollments', id);
@@ -58,7 +57,7 @@ const PeopleApi = (() => {
       const start = String(e.start_date || '').slice(0, 7);
       if (!Fees.isMonth(start)) return;
       const first = Fees.addMonths(start, 1);
-      if (first > horizon) return;
+      if (first > today) return;
       (byMonth[first] = byMonth[first] || []).push(id);
     });
     const changes = {};

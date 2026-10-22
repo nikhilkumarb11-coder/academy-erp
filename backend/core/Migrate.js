@@ -8,7 +8,11 @@
  * only when existing rows need transforming or back-filling.
  */
 const DATA_MIGRATIONS = [
-  // { version: 2, name: 'backfill_due_parent_id', up: () => { ... } },
+  {
+    version: 2,
+    name: 'drop_joining_month_and_future_dues',
+    up: () => { Fees.dropPrematureDues(); },
+  },
 ];
 
 const Migrate = (() => {

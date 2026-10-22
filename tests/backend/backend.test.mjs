@@ -21,7 +21,7 @@ describe('setup and migrations', () => {
     assert.equal(names.length, 29);
     assert.ok(!names.includes('Sheet1'));
     const meta = Object.fromEntries(be.sheetRows('_meta').map((r) => [r.key, r.value]));
-    assert.equal(meta.schema_version, '1');
+    assert.equal(meta.schema_version, '2');
     assert.equal(be.state.props.INITIAL_PASSWORD, undefined, 'initial password is deleted after hashing');
     assert.ok(be.state.props.PASSWORD_HASH && be.state.props.TOKEN_SECRET);
   });

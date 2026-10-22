@@ -3,10 +3,17 @@ import { beforeEach, describe, it } from 'node:test';
 import { createBackend, loadPreset } from './harness.mjs';
 
 /** Rays preset, fees set on three courses, one family: Aarav (Karate monthly + Abacus annual), Diya (Drawing monthly). */
-async function family({ start = '2026-10-13', today = '2026-10-13' } = {}) {
+function addMonths(month, n) {
+  const [y, m] = month.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
+/** Rays preset, fees set on three courses, one family: Aarav (Karate monthly + Abacus annual), Diya (Drawing monthly). */
+async function family({ start = '2026-10-13', today = '2026-10-13', bill = true } = {}) {
   const be = createBackend();
   be.state.today = today;
-  const token = await be.login();
+  let token = await be.login();
   await be.ok('system.seed', { preset: loadPreset('multi-activity') }, token);
   let boot = await be.ok('system.bootstrap', {}, token);
   const course = (name) => boot.Courses.find((c) => c.name === name);
@@ -28,6 +35,12 @@ async function family({ start = '2026-10-13', today = '2026-10-13' } = {}) {
       { name: 'Diya', enrollments: [{ course_id: course('Drawing').id, fee_plan_id: plan('Monthly').id, start_date: start }] },
     ],
   }, token);
+  const firstBill = addMonths(start.slice(0, 7), 1);
+  if (bill) {
+    be.state.today = `${firstBill}-01`;
+    token = await be.login();
+    await be.ok('dues.generate', { month: firstBill }, token);
+  }
   boot = await be.ok('system.bootstrap', {}, token);
   const dues = () => be.sheetRows('FeeDues').filter((d) => d.deleted !== true);
   const dueFor = (courseName, periodPrefix) => {
@@ -36,16 +49,23 @@ async function family({ start = '2026-10-13', today = '2026-10-13' } = {}) {
   };
   /** Moves the backend clock and logs in again (tokens expire after session_hours). */
   const at = async (date) => { be.state.today = date; ctx.token = await be.login(); };
-  const ctx = { be, token, at, res, course, plan, dues, dueFor, parentId: res.parent_id, aarav: res.student_ids[0], diya: res.student_ids[1] };
+  const ctx = { be, token, at, res, course, plan, dues, dueFor, firstBill, parentId: res.parent_id, aarav: res.student_ids[0], diya: res.student_ids[1] };
   return ctx;
 }
 
 describe('dues engine', () => {
   let f;
-  beforeEach(async () => { f = await family(); });
+  beforeEach(async () => { f = await family({ bill: false }); });
 
-  it('bills the next month at admission; annual = monthly × 10 × 85%', async () => {
-    assert.equal(f.res.changes.FeeDues.length, 3, 'joining month is never billed; November dues created at admission');
+  it('creates no dues in the joining month; first dues are the following month', async () => {
+    assert.equal((f.res.changes.FeeDues || []).length, 0, 'admission in October creates no dues yet');
+    const oct = await f.be.ok('dues.generate', { month: '2026-10' }, f.token);
+    assert.equal(oct.created, 0, 'joining month is never billed');
+    assert.equal(f.dues().length, 0);
+
+    await f.at('2026-11-01');
+    const nov = await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
+    assert.equal(nov.created, 3);
     const annual = f.dueFor('Abacus');
     assert.equal(annual.amount_due, 8500);
     assert.equal(annual.period_label, 'Nov 2026 – Aug 2027');
@@ -55,17 +75,18 @@ describe('dues engine', () => {
     assert.equal(f.dueFor('Karate').amount_due, 1000);
     assert.equal(f.dueFor('Karate').period_label, 'Nov 2026');
     assert.equal(f.dueFor('Drawing').status, 'Pending');
-    const oct = await f.be.ok('dues.generate', { month: '2026-10' }, f.token);
-    assert.equal(oct.created, 0, 'joining month is never billed');
   });
 
   it('is idempotent and never re-bills inside an annual period', async () => {
+    await f.at('2026-11-01');
+    await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
     await f.at('2026-12-01');
     const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
     assert.equal(dec.created, 2, 'Karate and Drawing monthly; Abacus is covered by the annual due');
     assert.equal(dec.total, 1800);
     const again = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
     assert.equal(again.created, 0);
+    await f.at('2027-09-01');
     const nextAnnual = await f.be.ok('dues.generate', { month: '2027-09' }, f.token);
     const abacus = nextAnnual.changes.FeeDues.find((d) => d.period_key === 'A-2027-09');
     assert.equal(abacus.amount_due, 8500);
@@ -73,8 +94,11 @@ describe('dues engine', () => {
   });
 
   it('skips courses with no fee, and enrollments that are on hold or have not started', async () => {
+    await f.at('2026-11-01');
+    await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
     await f.be.ok('catalog.save', { tab: 'Courses', row: { id: f.course('Drawing').id, monthly_fee: '' } }, f.token);
     await f.be.ok('students.setStatus', { id: f.aarav, status: 'On hold', reason: 'Exams' }, f.token);
+    await f.at('2026-12-01');
     const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
     assert.equal(dec.created, 0);
     assert.deepEqual(dec.skipped.map((s) => s.reason), ['No monthly fee set']);
@@ -84,23 +108,27 @@ describe('dues engine', () => {
   });
 
   it('does not re-bill when a student comes back from hold if the month is already covered', async () => {
+    await f.at('2026-11-01');
+    await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
     await f.at('2026-11-20');
     await f.be.ok('students.setStatus', { id: f.aarav, status: 'On hold', reason: 'Travel' }, f.token);
     const back = await f.be.ok('students.setStatus', { id: f.aarav, status: 'Active' }, f.token);
-    assert.equal((back.changes.FeeDues || []).length, 0, 'November was already billed at admission');
+    assert.equal((back.changes.FeeDues || []).length, 0, 'November was already billed');
   });
 
   it('starts billing the month after start when admitted in advance', async () => {
-    const g = await family({ start: '2026-12-01', today: '2026-10-20' });
-    assert.equal((g.res.changes.FeeDues || []).length, 0, 'first bill month is still beyond the horizon');
+    const g = await family({ start: '2026-12-01', today: '2026-10-20', bill: false });
+    assert.equal((g.res.changes.FeeDues || []).length, 0, 'first bill month has not arrived');
     await g.at('2026-12-01');
     const dec = await g.be.ok('dues.generate', { month: '2026-12' }, g.token);
     assert.equal(dec.created, 0, 'joining month itself is not billed');
+    await g.at('2027-01-01');
     const jan = await g.be.ok('dues.generate', { month: '2027-01' }, g.token);
     assert.equal(jan.created, 3);
   });
 
   it('adjusts, prorates, waives and removes dues with notes', async () => {
+    f = await family();
     const karate = f.dueFor('Karate');
     const noNote = await f.be.call('dues.adjust', { id: karate.id, discount: 100 }, f.token);
     assert.equal(noNote.error.details.field, 'note');
@@ -123,6 +151,7 @@ describe('dues engine', () => {
   });
 
   it('adds one-time charges later; admission charges are not stored as dues', async () => {
+    f = await family();
     const charge = await f.be.ok('dues.addCharge', { student_id: f.diya, label: 'Uniform', amount: 750 }, f.token);
     assert.equal(charge.changes.FeeDues[0].kind, 'OneTime');
     assert.equal(charge.changes.FeeDues[0].period_label, 'Uniform');
@@ -208,6 +237,7 @@ describe('payments', () => {
     assert.ok(f.dues().every((d) => d.status === 'Pending' && d.balance === d.amount_due));
 
     // The 500 credit belonged to the cancelled payment, so new dues stay unpaid.
+    await f.at('2026-12-01');
     const dec = await f.be.ok('dues.generate', { month: '2026-12' }, f.token);
     assert.ok(dec.changes.FeeDues.every((d) => d.status === 'Pending'));
 
@@ -276,7 +306,7 @@ describe('payments', () => {
 
 describe('attendance', () => {
   let f;
-  beforeEach(async () => { f = await family(); });
+  beforeEach(async () => { f = await family({ bill: false }); });
 
   it('upserts marks for a course and day, and reports a month', async () => {
     const course_id = f.course('Karate').id;

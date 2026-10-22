@@ -445,7 +445,7 @@ export function GenerateDuesSheet({ onClose }: { onClose: () => void }) {
       <form id="gen-form" onSubmit={submit} className="space-y-4">
         <p className="text-sm text-muted">Dues are created automatically on the 1st of every month. Use this to bill a month now or catch up a missed one. It never bills the same period twice.</p>
         <SelectField label="Month" value={month} onChange={(e) => setMonth(e.target.value)}>
-          {[-3, -2, -1, 0, 1].map((n) => {
+          {[-3, -2, -1, 0].map((n) => {
             const m = addMonths(thisMonth, n);
             return <option key={m} value={m}>{monthLabel(m)}{n === 0 ? ' (this month)' : ''}</option>;
           })}

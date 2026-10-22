@@ -85,6 +85,7 @@ export function seedDemo(call: Call, opts: { preset: { id: string }; academyName
 
   api('dues.generate', { month: monthOf(monthStart(today, -2)) });
   api('dues.generate', { month: monthOf(monthStart(today, -1)) });
+  api('dues.generate', { month: monthOf(monthStart(today, 0)) });
 
   // Families pay what was due before this month (a few are behind); half also pay this month already.
   boot = api('system.bootstrap') as Boot;
