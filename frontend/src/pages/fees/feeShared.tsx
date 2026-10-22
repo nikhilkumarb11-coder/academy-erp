@@ -1,8 +1,10 @@
+import clsx from 'clsx';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../auth/AuthContext';
 import { errorMessage } from '../../api/errors';
 import { useToast } from '../../components/Toast';
+import { Card } from '../../components/ui';
 import type { CoreData, CoreTables, Payment, Settings } from '../../data/types';
 import { applyChanges, type Changes } from '../../data/merge';
 import { coreKey, useCoreData } from '../../data/useCoreData';
@@ -21,6 +23,15 @@ import { num } from '../../lib/values';
 export function useMoney() {
   const { locale } = useTenant();
   return (n: number) => formatMoney(n, locale.currencySymbol);
+}
+
+export function Stat({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'success' }) {
+  return (
+    <Card className="p-3 sm:p-4">
+      <p className="text-[11px] leading-tight text-muted sm:text-xs">{label}</p>
+      <p className={clsx('mt-1 whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl', tone === 'danger' && 'text-danger', tone === 'success' && 'text-success')}>{value}</p>
+    </Card>
+  );
 }
 
 interface ReceiptResult {

@@ -1,24 +1,37 @@
 import clsx from 'clsx';
-import { ArrowLeft, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Wallet } from 'lucide-react';
 import { useDeferredValue, useMemo } from 'react';
-import { Link, useSearchParams } from 'react-router';
-import { Card, EmptyState, PageHeader, SelectField, Spinner, StatusBadge } from '../../components/ui';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { FeeSearch } from '../../components/FeeSearch';
+import { Button, Card, EmptyState, Spinner, StatusBadge } from '../../components/ui';
 import { useCoreData } from '../../data/useCoreData';
 import { addMonths, monthLabel, todayIso } from '../../lib/dates';
-import { duesInMonth } from '../../lib/ledger';
+import { duesInMonth, type MonthDueRow } from '../../lib/ledger';
 import { phoneDigits } from '../../lib/phone';
 import { bool, isDeleted } from '../../lib/values';
 import { useLabels } from '../../tenant/TenantContext';
-import { useMoney } from './feeShared';
+import { Stat, useMoney } from './feeShared';
 
+type StatusFilter = 'pending' | 'paid' | 'all';
+
+/** Old bookmark `/fees/by-month` → Families/By month tabs on Fees. */
 export function FeesByMonthPage() {
+  const [params] = useSearchParams();
+  const next = new URLSearchParams(params);
+  next.set('tab', 'month');
+  return <Navigate to={`/fees?${next.toString()}`} replace />;
+}
+
+export function FeesByMonthPanel() {
   const labels = useLabels();
   const money = useMoney();
+  const navigate = useNavigate();
   const { data, isPending } = useCoreData();
   const [params, setParams] = useSearchParams();
   const thisMonth = todayIso().slice(0, 7);
   const month = params.get('month') ?? thisMonth;
   const courseId = params.get('course') ?? '';
+  const status = (params.get('status') as StatusFilter) || 'pending';
   const query = params.get('q') ?? '';
   const deferredQuery = useDeferredValue(query);
 
@@ -29,33 +42,46 @@ export function FeesByMonthPage() {
       return p;
     }, { replace: true });
 
+  const courses = useMemo(() => {
+    if (!data) return [];
+    return data.tables.Courses.filter((c) => bool(c.active) && !isDeleted(c)).sort((a, b) => a.name.localeCompare(b.name));
+  }, [data]);
+
+  const allRows = useMemo(() => (data ? duesInMonth(data.tables, month, courseId) : []), [data, month, courseId]);
+
   const rows = useMemo(() => {
     if (!data) return [];
-    const all = duesInMonth(data.tables, month, courseId);
     const q = deferredQuery.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, '');
-    if (!q) return all;
     const parents = new Map(data.tables.Parents.map((p) => [p.id, p]));
-    return all.filter((r) => {
+    return allRows.filter((r) => {
+      if (status === 'pending' && r.balance <= 0) return false;
+      if (status === 'paid' && r.balance > 0) return false;
+      if (!q) return true;
       if (r.studentName.toLowerCase().includes(q) || r.guardian.toLowerCase().includes(q) || r.courseName.toLowerCase().includes(q)) return true;
       if (r.due.period_label.toLowerCase().includes(q)) return true;
       const phone = parents.get(r.parentId)?.phone ?? '';
       return qDigits.length >= 3 && phoneDigits(phone).includes(qDigits);
     });
-  }, [data, month, courseId, deferredQuery]);
+  }, [data, allRows, status, deferredQuery]);
 
   if (isPending || !data) return <Spinner />;
-  const courses = data.tables.Courses.filter((c) => bool(c.active) && !isDeleted(c)).sort((a, b) => a.name.localeCompare(b.name));
-  const totals = rows.reduce((s, r) => ({ due: s.due + r.amountDue, paid: s.paid + r.paid, balance: s.balance + r.balance }), { due: 0, paid: 0, balance: 0 });
-  const paidCount = rows.filter((r) => r.balance <= 0).length;
-  const openCount = rows.length - paidCount;
+
+  const billed = allRows.reduce((s, r) => s + r.amountDue, 0);
+  const collected = allRows.reduce((s, r) => s + r.paid, 0);
+  const outstanding = allRows.reduce((s, r) => s + r.balance, 0);
+  const pendingRows = allRows.filter((r) => r.balance > 0);
+  const paidRows = allRows.filter((r) => r.balance <= 0);
+
+  const statusChips: { key: StatusFilter; label: string }[] = [
+    { key: 'pending', label: `Still owed (${pendingRows.length})` },
+    { key: 'paid', label: `Paid (${paidRows.length})` },
+    { key: 'all', label: `All (${allRows.length})` },
+  ];
 
   return (
     <>
-      <Link to="/fees" className="mb-3 inline-flex min-h-9 items-center gap-1 text-sm font-medium text-primary">
-        <ArrowLeft className="size-4" aria-hidden /> Fees & dues
-      </Link>
-      <PageHeader title="Fees by month" subtitle="Every due for the month — paid and pending" />
+      <p className="mb-3 text-sm text-muted">Who was billed in {monthLabel(month)} — paid and still owed.</p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="inline-flex items-center rounded-xl border border-line bg-surface">
@@ -67,80 +93,115 @@ export function FeesByMonthPage() {
             <ChevronRight className="size-5" aria-hidden />
           </button>
         </div>
-        <SelectField label={labels.course} className="min-w-44 [&>span]:sr-only" value={courseId} onChange={(e) => setParam('course', e.target.value)}>
-          <option value="">All {labels.courses.toLowerCase()}</option>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </SelectField>
       </div>
 
       <div className="mb-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <Card className="p-3 sm:p-4">
-          <p className="text-[11px] text-muted sm:text-xs">Billed</p>
-          <p className="mt-1 whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl">{money(totals.due)}</p>
-        </Card>
-        <Card className="p-3 sm:p-4">
-          <p className="text-[11px] text-muted sm:text-xs">Collected</p>
-          <p className="mt-1 whitespace-nowrap text-base font-semibold tabular-nums text-success sm:text-xl">{money(totals.paid)}</p>
-        </Card>
-        <Card className="p-3 sm:p-4">
-          <p className="text-[11px] text-muted sm:text-xs">Outstanding</p>
-          <p className={clsx('mt-1 whitespace-nowrap text-base font-semibold tabular-nums sm:text-xl', totals.balance > 0 && 'text-danger')}>{money(totals.balance)}</p>
-        </Card>
+        <Stat label="Billed" value={money(billed)} />
+        <Stat label="Collected" value={money(collected)} tone="success" />
+        <Stat label="Still owed" value={money(outstanding)} tone={outstanding > 0 ? 'danger' : undefined} />
       </div>
-      <p className="mb-3 text-sm text-muted">{rows.length} due{rows.length === 1 ? '' : 's'} · {paidCount} paid · {openCount} open</p>
 
-      <label className="relative mb-4 block">
-        <span className="sr-only">Search</span>
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setParam('q', e.target.value)}
-          placeholder={`${labels.student}, ${labels.guardian.toLowerCase()}, phone or ${labels.course.toLowerCase()}`}
-          className="min-h-11 w-full rounded-xl border border-line bg-surface pl-9 pr-3 text-base outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
-        />
-      </label>
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Payment status">
+        {statusChips.map((c) => (
+          <button key={c.key} type="button" role="tab" aria-selected={status === c.key} onClick={() => setParam('status', c.key, 'pending')}
+            className={clsx('min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium', status === c.key ? 'border-primary bg-primary text-white' : 'border-line bg-surface')}>
+            {c.label}
+          </button>
+        ))}
+      </div>
 
-      {rows.length === 0 ? (
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+        <button type="button" aria-pressed={!courseId} onClick={() => setParam('course', '')}
+          className={clsx('min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium', !courseId ? 'border-primary bg-primary text-white' : 'border-line bg-surface')}>
+          All {labels.courses.toLowerCase()}
+        </button>
+        {courses.map((c) => (
+          <button key={c.id} type="button" aria-pressed={courseId === c.id} onClick={() => setParam('course', c.id)}
+            className={clsx('min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium', courseId === c.id ? 'border-primary bg-primary text-white' : 'border-line bg-surface')}>
+            {c.name}
+          </button>
+        ))}
+      </div>
+
+      <FeeSearch
+        className="mb-4"
+        tables={data.tables}
+        value={query}
+        courseId={courseId}
+        courses={courses}
+        onQuery={(q) => setParam('q', q)}
+        onCourse={(id) => setParam('course', id)}
+      />
+
+      {allRows.length === 0 ? (
         <Card>
           <EmptyState title={`No dues for ${monthLabel(month)}`}>
-            Generate dues for this month from Fees & dues, or pick another month.
+            Generate dues for this month from the Families tab, or pick another month.
           </EmptyState>
         </Card>
+      ) : rows.length === 0 ? (
+        <Card><EmptyState title="No matches">Try another status, course or search.</EmptyState></Card>
+      ) : status === 'all' ? (
+        <div className="space-y-6">
+          <DueSection title="Still to collect" rows={rows.filter((r) => r.balance > 0)} money={money} empty="Everyone in this filter has paid." onCollect={(id) => navigate(`/fees/${id}?pay=1`)} />
+          <DueSection title="Fully paid" rows={rows.filter((r) => r.balance <= 0)} money={money} empty="No paid dues in this filter." />
+        </div>
       ) : (
-        <Card className="overflow-x-auto p-0 sm:p-0">
-          <table className="w-full min-w-[36rem] text-left text-sm">
-            <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
-              <tr>
-                <th className="px-3 py-2.5 font-medium sm:px-4">{labels.student}</th>
-                <th className="px-3 py-2.5 font-medium">{labels.course}</th>
-                <th className="px-3 py-2.5 text-right font-medium">Due</th>
-                <th className="px-3 py-2.5 text-right font-medium">Paid</th>
-                <th className="px-3 py-2.5 text-right font-medium">Balance</th>
-                <th className="px-3 py-2.5 font-medium sm:px-4">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map((r) => (
-                <tr key={r.due.id}>
-                  <td className="px-3 py-2.5 sm:px-4">
-                    <Link to={`/fees/${r.parentId}`} className="font-medium hover:text-primary">{r.studentName}</Link>
-                    <p className="text-xs text-muted">{r.guardian}</p>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <p>{r.courseName}</p>
-                    <p className="text-xs text-muted">{r.due.period_label}</p>
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{money(r.amountDue)}</td>
-                  <td className="px-3 py-2.5 text-right tabular-nums">{money(r.paid)}</td>
-                  <td className={clsx('px-3 py-2.5 text-right font-medium tabular-nums', r.balance > 0 && 'text-danger')}>{money(r.balance)}</td>
-                  <td className="px-3 py-2.5 sm:px-4"><StatusBadge status={r.due.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+        <ul className="space-y-2">
+          {rows.map((r) => <DueCard key={r.due.id} row={r} money={money} onCollect={r.balance > 0 ? () => navigate(`/fees/${r.parentId}?pay=1`) : undefined} />)}
+        </ul>
       )}
     </>
+  );
+}
+
+function DueSection({ title, rows, money, empty, onCollect }: {
+  title: string;
+  rows: MonthDueRow[];
+  money: (n: number) => string;
+  empty: string;
+  onCollect?: (parentId: string) => void;
+}) {
+  const subtotal = rows.reduce((s, r) => s + r.balance, 0);
+  return (
+    <section>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
+        {rows.length > 0 && subtotal > 0 && <p className="text-sm font-medium tabular-nums text-danger">{money(subtotal)}</p>}
+        {rows.length > 0 && subtotal <= 0 && <p className="text-sm text-muted">{rows.length}</p>}
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted">{empty}</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r) => <DueCard key={r.due.id} row={r} money={money} onCollect={onCollect ? () => onCollect(r.parentId) : undefined} />)}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function DueCard({ row: r, money, onCollect }: { row: MonthDueRow; money: (n: number) => string; onCollect?: () => void }) {
+  return (
+    <li className="rounded-2xl border border-line bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <Link to={`/fees/${r.parentId}`} className="font-medium hover:text-primary">{r.studentName}</Link>
+          <p className="text-xs text-muted">{r.guardian} · {r.courseName}</p>
+          <p className="mt-0.5 text-xs text-muted">{r.due.period_label}</p>
+        </div>
+        <div className="text-right">
+          <p className={clsx('font-semibold tabular-nums', r.balance > 0 ? 'text-danger' : 'text-success')}>
+            {r.balance > 0 ? money(r.balance) : money(r.amountDue)}
+          </p>
+          <StatusBadge status={r.due.status} />
+        </div>
+      </div>
+      {onCollect && (
+        <div className="mt-3">
+          <Button className="min-h-10 w-full sm:w-auto" onClick={onCollect}><Wallet className="size-4" aria-hidden /> Collect</Button>
+        </div>
+      )}
+    </li>
   );
 }

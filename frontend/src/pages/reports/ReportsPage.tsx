@@ -67,17 +67,20 @@ function FeeStatus({ data }: { data: CoreData }) {
   const thisMonth = today.slice(0, 7);
   const [month, setMonth] = useState(thisMonth);
   const [courseId, setCourseId] = useState('');
+  const [status, setStatus] = useState<'pending' | 'paid' | 'all'>('pending');
   const courses = data.tables.Courses.filter((c) => bool(c.active) && !isDeleted(c)).sort((a, b) => a.name.localeCompare(b.name));
   const rows = useMemo(() => duesInMonth(data.tables, month, courseId), [data, month, courseId]);
+  const pending = rows.filter((r) => r.balance > 0);
+  const paidRows = rows.filter((r) => r.balance <= 0);
+  const shown = status === 'pending' ? pending : status === 'paid' ? paidRows : rows;
   const totals = rows.reduce((s, r) => ({ due: s.due + r.amountDue, paid: s.paid + r.paid, balance: s.balance + r.balance }), { due: 0, paid: 0, balance: 0 });
-  const paid = rows.filter((r) => r.balance <= 0).length;
-  const open = rows.length - paid;
 
   function exportCsv() {
     downloadCsv(`fee-status-${month}.csv`, [
-      ['Student', 'Parent', 'Course', 'Period', 'Due', 'Paid', 'Balance', 'Status'],
-      ...rows.map((r) => [r.studentName, r.guardian, r.courseName, r.due.period_label, r.amountDue, r.paid, r.balance, r.due.status]),
-      ['Total', '', '', '', totals.due, totals.paid, totals.balance, ''],
+      ['Section', 'Student', 'Parent', 'Course', 'Period', 'Due', 'Paid', 'Balance', 'Status'],
+      ...pending.map((r) => ['Still to collect', r.studentName, r.guardian, r.courseName, r.due.period_label, r.amountDue, r.paid, r.balance, r.due.status]),
+      ...paidRows.map((r) => ['Fully paid', r.studentName, r.guardian, r.courseName, r.due.period_label, r.amountDue, r.paid, r.balance, r.due.status]),
+      ['Total', '', '', '', '', totals.due, totals.paid, totals.balance, ''],
     ]);
   }
 
@@ -94,14 +97,58 @@ function FeeStatus({ data }: { data: CoreData }) {
       <p className="hidden text-sm text-muted print:block">{monthLabel(month)}{courseId ? ` · ${courses.find((c) => c.id === courseId)?.name}` : ''}</p>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Card className="p-3"><p className="text-xs text-muted">Dues</p><p className="mt-1 font-semibold tabular-nums">{rows.length}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted">Paid</p><p className="mt-1 font-semibold tabular-nums text-success">{paid}</p></Card>
-        <Card className="p-3"><p className="text-xs text-muted">Open</p><p className="mt-1 font-semibold tabular-nums">{open}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted">Still to collect</p><p className="mt-1 font-semibold tabular-nums">{pending.length}</p></Card>
+        <Card className="p-3"><p className="text-xs text-muted">Fully paid</p><p className="mt-1 font-semibold tabular-nums text-success">{paidRows.length}</p></Card>
         <Card className="p-3"><p className="text-xs text-muted">Outstanding</p><p className={clsx('mt-1 whitespace-nowrap font-semibold tabular-nums', totals.balance > 0 && 'text-danger')}>{money(totals.balance)}</p></Card>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 print:hidden" role="tablist">
+        {([
+          { key: 'pending' as const, label: `Still to collect (${pending.length})` },
+          { key: 'paid' as const, label: `Fully paid (${paidRows.length})` },
+          { key: 'all' as const, label: 'All' },
+        ]).map((c) => (
+          <button key={c.key} type="button" role="tab" aria-selected={status === c.key} onClick={() => setStatus(c.key)}
+            className={clsx('min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium', status === c.key ? 'border-primary bg-primary text-white' : 'border-line bg-surface')}>
+            {c.label}
+          </button>
+        ))}
       </div>
       {rows.length === 0 ? (
         <Card><p className="text-sm text-muted">No dues for {monthLabel(month)}. Generate dues from Fees & dues first.</p></Card>
+      ) : status === 'all' ? (
+        <div className="space-y-6">
+          <FeeStatusTable title="Still to collect" rows={pending} money={money} labels={labels} accent="danger" />
+          <FeeStatusTable title="Fully paid" rows={paidRows} money={money} labels={labels} accent="success" />
+        </div>
+      ) : shown.length === 0 ? (
+        <Card><p className="text-sm text-muted">{status === 'paid' ? 'No fully paid dues in this filter.' : 'Nothing still owed in this filter.'}</p></Card>
       ) : (
-        <Card className="overflow-x-auto p-0 sm:p-0 print:break-inside-avoid">
+        <FeeStatusTable title={status === 'paid' ? 'Fully paid' : 'Still to collect'} rows={shown} money={money} labels={labels} accent={status === 'paid' ? 'success' : 'danger'} />
+      )}
+    </div>
+  );
+}
+
+function FeeStatusTable({ title, rows, money, labels, accent }: {
+  title: string;
+  rows: ReturnType<typeof duesInMonth>;
+  money: (n: number) => string;
+  labels: { student: string; course: string };
+  accent: 'danger' | 'success';
+}) {
+  const subDue = rows.reduce((s, r) => s + r.amountDue, 0);
+  const subPaid = rows.reduce((s, r) => s + r.paid, 0);
+  const subBal = rows.reduce((s, r) => s + r.balance, 0);
+  return (
+    <section className="print:break-inside-avoid">
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>
+        <p className="text-sm text-muted">{rows.length} · {money(accent === 'danger' ? subBal : subDue)}</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted">None.</p>
+      ) : (
+        <Card className="overflow-x-auto p-0 sm:p-0">
           <table className="w-full min-w-[36rem] text-left text-sm">
             <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
               <tr>
@@ -133,17 +180,17 @@ function FeeStatus({ data }: { data: CoreData }) {
             </tbody>
             <tfoot>
               <tr className="border-t border-line font-semibold">
-                <td className="px-3 py-2.5 sm:px-4" colSpan={2}>Total</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.due)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.paid)}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums">{money(totals.balance)}</td>
+                <td className="px-3 py-2.5 sm:px-4" colSpan={2}>Subtotal</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{money(subDue)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{money(subPaid)}</td>
+                <td className={clsx('px-3 py-2.5 text-right tabular-nums', subBal > 0 && 'text-danger')}>{money(subBal)}</td>
                 <td />
               </tr>
             </tfoot>
           </table>
         </Card>
       )}
-    </div>
+    </section>
   );
 }
 

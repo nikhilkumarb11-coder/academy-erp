@@ -7,7 +7,7 @@ import type { PaymentMode } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
 import { addMonths, formatDate, monthLabel, todayIso } from '../../lib/dates';
 import { num } from '../../lib/values';
-import { Stat } from './FeesPage';
+import { Stat } from './feeShared';
 import { paymentLines, useMoney } from './feeShared';
 
 const MODES: PaymentMode[] = ['Cash', 'UPI', 'Bank', 'Gateway'];

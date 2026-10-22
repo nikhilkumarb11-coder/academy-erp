@@ -12,7 +12,7 @@ import { Alert, Button, Card, EmptyState, Field, PageHeader, SelectField, Spinne
 import { activeCourses, attendanceDayQuery, attendanceMonthQuery, defaultAttendanceCourse, LAST_COURSE } from '../../data/attendance';
 import type { AttendanceMark, AttendanceStatus, CoreTables, Holiday } from '../../data/types';
 import { useCoreData } from '../../data/useCoreData';
-import { useLogMessages } from '../../data/useMessages';
+import { useLogMessages, useRecentMessages } from '../../data/useMessages';
 import { beginSave, endSave } from '../../data/pending';
 import { useWrite } from '../../data/useWrite';
 import { addDaysIso, addMonths, formatDate, monthLabel, todayIso, weekdayShort } from '../../lib/dates';
@@ -38,10 +38,17 @@ function rosterFor(t: CoreTables, courseId: string, batchId: string, date: strin
     .sort((a, b) => a.student.name.localeCompare(b.student.name));
 }
 
+type AttTab = 'mark' | 'remind' | 'report';
+const ATT_TABS: { key: AttTab; label: string }[] = [
+  { key: 'mark', label: 'Mark' },
+  { key: 'remind', label: 'Remind' },
+  { key: 'report', label: 'Monthly report' },
+];
+
 export function AttendancePage() {
   const { data, isPending } = useCoreData();
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'report' ? 'report' : 'mark';
+  const tab = (ATT_TABS.some((t) => t.key === params.get('tab')) ? params.get('tab') : 'mark') as AttTab;
 
   if (isPending || !data) return <Spinner />;
   const courses = activeCourses(data.tables);
@@ -49,19 +56,21 @@ export function AttendancePage() {
   return (
     <>
       <PageHeader title="Attendance" />
-      <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1" role="tablist">
-        {(['mark', 'report'] as const).map((k) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k}
-            onClick={() => setParams((p) => { if (k === 'mark') p.delete('tab'); else p.set('tab', k); return p; }, { replace: true })}
-            className={clsx('min-h-9 rounded-lg px-4 text-sm font-medium', tab === k ? 'bg-primary text-white' : 'text-muted')}>
-            {k === 'mark' ? 'Mark' : 'Monthly report'}
+      <div className="mb-4 flex max-w-full overflow-x-auto rounded-xl border border-line bg-surface p-1 sm:inline-flex" role="tablist">
+        {ATT_TABS.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key}
+            onClick={() => setParams((p) => { if (t.key === 'mark') p.delete('tab'); else p.set('tab', t.key); return p; }, { replace: true })}
+            className={clsx('min-h-9 shrink-0 rounded-lg px-3 text-sm font-medium sm:px-4', tab === t.key ? 'bg-primary text-white' : 'text-muted')}>
+            {t.label}
           </button>
         ))}
       </div>
       {courses.length === 0 ? (
         <Card><EmptyState title="No courses yet">Add courses and admissions first.</EmptyState></Card>
       ) : tab === 'mark' ? (
-        <MarkTab t={data.tables} courses={courses} settings={data.settings} />
+        <MarkTab t={data.tables} courses={courses} />
+      ) : tab === 'remind' ? (
+        <RemindTab t={data.tables} courses={courses} settings={data.settings} />
       ) : (
         <ReportTab t={data.tables} courses={courses} />
       )}
@@ -69,20 +78,19 @@ export function AttendancePage() {
   );
 }
 
-function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables['Courses']; settings: Record<string, string> }) {
+function MarkTab({ t, courses }: { t: CoreTables; courses: CoreTables['Courses'] }) {
   const labels = useLabels();
   const tenant = useTenant();
   const { api } = useAuth();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const logMessages = useLogMessages();
   const [params, setParams] = useSearchParams();
   const today = todayIso();
   const courseId = params.get('course') ?? defaultAttendanceCourse(t, tenant.slug);
   const batchId = params.get('batch') ?? '';
   const date = params.get('date') ?? today;
   const [edits, setEdits] = useState<{ key: string; marks: Record<string, Mark> }>({ key: '', marks: {} });
-  const [absentees, setAbsentees] = useState<string[] | null>(null);
+  const [remindPrompt, setRemindPrompt] = useState<number | null>(null);
   const [holidaySheet, setHolidaySheet] = useState(false);
   const deleteHoliday = useWrite('holidays.delete');
 
@@ -143,10 +151,10 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
     });
     queryClient.setQueryData<DayMarks>(marksKey, (d) => withCourse(d, [...local.values()]));
     localStorage.setItem(`${LAST_COURSE}:${tenant.slug}`, courseId);
-    const newlyAbsent = sent.filter(([, m]) => m === 'Absent').map(([id]) => id);
+    const newlyAbsent = sent.filter(([, m]) => m === 'Absent').length;
     setEdits({ key: '', marks: {} });
     toast(`Saved: ${counts.Present} present, ${counts.Absent} absent`);
-    if (newlyAbsent.length) setAbsentees(newlyAbsent);
+    if (newlyAbsent > 0) setRemindPrompt(newlyAbsent);
 
     beginSave([]);
     try {
@@ -165,20 +173,6 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
       endSave([]);
     }
   }
-
-  const absentMessage = (studentId: string) => {
-    const student = t.Students.find((s) => s.id === studentId);
-    const parent = t.Parents.find((p) => p.id === student?.parent_id);
-    if (!student || !parent) return null;
-    const text = fillMessage(templateText(t.MessageTemplates, 'Absent'), {
-      parent: parent.guardian_name,
-      student: student.name,
-      course: course?.name ?? '',
-      date: formatDate(date),
-      academy: settings.academy_name || tenant.name,
-    });
-    return { url: whatsappUrl(parent.phone, text), text, parentId: parent.id };
-  };
 
   return (
     <div className="pb-24 lg:pb-0">
@@ -271,24 +265,164 @@ function MarkTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables[
         </div>
       )}
 
-      {absentees && (
-        <Sheet open title="Tell parents?" onClose={() => setAbsentees(null)} footer={<div className="flex justify-end"><Button variant="secondary" onClick={() => setAbsentees(null)}>Done</Button></div>}>
-          <p className="mb-3 text-sm text-muted">Send a WhatsApp message to the parents of absent {labels.students.toLowerCase()}.</p>
-          <ul className="divide-y divide-line rounded-xl border border-line">
-            {absentees.map((id) => {
-              const msg = absentMessage(id);
-              return (
-                <li key={id} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="font-medium">{t.Students.find((s) => s.id === id)?.name}</span>
-                  {msg && <a href={msg.url} target="_blank" rel="noreferrer" onClick={() => logMessages([{ type: 'Absent', parent_id: msg.parentId, student_id: id, preview: msg.text }])} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line px-3 text-sm font-medium text-primary"><MessageCircle className="size-4" aria-hidden /> WhatsApp</a>}
-                </li>
-              );
-            })}
-          </ul>
+      {remindPrompt !== null && (
+        <Sheet
+          open
+          title="Remind parents?"
+          onClose={() => setRemindPrompt(null)}
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRemindPrompt(null)}>Later</Button>
+              <Button onClick={() => {
+                setRemindPrompt(null);
+                setParams((p) => { p.set('tab', 'remind'); return p; }, { replace: true });
+              }}>
+                Remind now
+              </Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-muted">
+            {remindPrompt} {remindPrompt === 1 ? labels.student.toLowerCase() : labels.students.toLowerCase()} marked absent.
+            Open Remind any time to send WhatsApp one by one — the list stays for this course and day.
+          </p>
         </Sheet>
       )}
 
       {holidaySheet && <HolidaySheet date={date} courseId={courseId} courseName={course?.name ?? ''} onClose={() => setHolidaySheet(false)} />}
+    </div>
+  );
+}
+
+function absentWhatsApp(
+  t: CoreTables,
+  settings: Record<string, string>,
+  academy: string,
+  courseName: string,
+  date: string,
+  studentId: string,
+) {
+  const student = t.Students.find((s) => s.id === studentId);
+  const parent = t.Parents.find((p) => p.id === student?.parent_id);
+  if (!student || !parent) return null;
+  const text = fillMessage(templateText(t.MessageTemplates, 'Absent'), {
+    parent: parent.guardian_name,
+    student: student.name,
+    course: courseName,
+    date: formatDate(date),
+    academy: settings.academy_name || academy,
+  });
+  return { studentId, url: whatsappUrl(parent.phone, text), text, parentId: parent.id, studentName: student.name, parentName: parent.guardian_name };
+}
+
+function RemindTab({ t, courses, settings }: { t: CoreTables; courses: CoreTables['Courses']; settings: Record<string, string> }) {
+  const labels = useLabels();
+  const tenant = useTenant();
+  const { api } = useAuth();
+  const logMessages = useLogMessages();
+  const [params, setParams] = useSearchParams();
+  const today = todayIso();
+  const courseId = params.get('course') ?? defaultAttendanceCourse(t, tenant.slug);
+  const date = params.get('date') ?? today;
+  const [sentLocal, setSentLocal] = useState<Set<string>>(() => new Set());
+
+  const set = (key: string, value: string, fallback = '') =>
+    setParams((p) => {
+      if (value === fallback) p.delete(key);
+      else p.set(key, value);
+      return p;
+    }, { replace: true });
+
+  const marksQuery = useQuery(attendanceDayQuery(api, tenant.slug, date));
+  const course = courses.find((c) => c.id === courseId);
+  const absentees = useMemo(() => {
+    const ids = (marksQuery.data?.marks ?? [])
+      .filter((m) => m.course_id === courseId && m.status === 'Absent')
+      .map((m) => m.student_id);
+    return [...new Set(ids)]
+      .map((id) => absentWhatsApp(t, settings, tenant.name, course?.name ?? '', date, id))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .sort((a, b) => a.studentName.localeCompare(b.studentName));
+  }, [marksQuery.data, courseId, t, settings, tenant.name, course?.name, date]);
+
+  const messages = useRecentMessages(14);
+  const alreadySent = useMemo(() => {
+    const set = new Set(sentLocal);
+    (messages.data ?? []).forEach((m) => {
+      if (m.type !== 'Absent' || !m.student_id) return;
+      if (String(m.sent_at).slice(0, 10) === date) set.add(m.student_id);
+    });
+    return set;
+  }, [messages.data, date, sentLocal]);
+
+  return (
+    <div>
+      <div className="mb-3 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <SelectField label={labels.course} className="[&>span]:sr-only" value={courseId} onChange={(e) => set('course', e.target.value)}>
+          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </SelectField>
+        <div className="flex items-center gap-1">
+          <button type="button" aria-label="Previous day" className="grid size-11 place-items-center rounded-xl border border-line bg-surface" onClick={() => set('date', addDaysIso(date, -1), today)}>
+            <ChevronLeft className="size-5" aria-hidden />
+          </button>
+          <label className="flex-1">
+            <span className="sr-only">Date</span>
+            <input type="date" value={date} max={today} onChange={(e) => e.target.value && set('date', e.target.value, today)}
+              className="min-h-11 w-full rounded-xl border border-line bg-surface px-3 text-base" />
+          </label>
+          <button type="button" aria-label="Next day" disabled={date >= today} className="grid size-11 place-items-center rounded-xl border border-line bg-surface disabled:opacity-40" onClick={() => set('date', addDaysIso(date, 1), today)}>
+            <ChevronRight className="size-5" aria-hidden />
+          </button>
+        </div>
+      </div>
+      <p className="mb-3 text-sm text-muted">
+        Absent on {weekdayShort(date)}, {formatDate(date)}
+        {absentees.length > 0 && ` · ${absentees.length} to remind`}
+        . Send one WhatsApp at a time — come back later if you skip someone.
+      </p>
+
+      {marksQuery.isPending ? (
+        <Spinner label="Loading absentees…" />
+      ) : marksQuery.isError ? (
+        <Alert>{errorMessage(marksQuery.error)} <button type="button" className="underline" onClick={() => marksQuery.refetch()}>Retry</button></Alert>
+      ) : absentees.length === 0 ? (
+        <Card>
+          <EmptyState title="No absentees for this day">
+            Mark attendance first, then return here to message parents.
+          </EmptyState>
+        </Card>
+      ) : (
+        <Card className="p-0 sm:p-0">
+          <ul className="divide-y divide-line">
+            {absentees.map((msg) => {
+              const done = alreadySent.has(msg.studentId);
+              return (
+                <li key={msg.studentId} className="flex items-center gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{msg.studentName}</p>
+                    <p className="text-xs text-muted">{msg.parentName}{done ? ' · messaged' : ''}</p>
+                  </div>
+                  <a
+                    href={msg.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => {
+                      setSentLocal((prev) => new Set(prev).add(msg.studentId));
+                      logMessages([{ type: 'Absent', parent_id: msg.parentId, student_id: msg.studentId, preview: msg.text }]);
+                    }}
+                    className={clsx(
+                      'inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border px-3 text-sm font-medium',
+                      done ? 'border-line text-muted' : 'border-line text-primary hover:bg-primary-soft',
+                    )}
+                  >
+                    <MessageCircle className="size-4" aria-hidden /> {done ? 'Send again' : 'WhatsApp'}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 }

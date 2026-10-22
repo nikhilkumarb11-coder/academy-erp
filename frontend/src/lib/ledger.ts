@@ -47,6 +47,7 @@ export interface FamilySummary {
   children: string[];
   /** Course names of open dues — used by Fees search. */
   courses: string[];
+  courseIds: string[];
   outstanding: number;
   overdue: number;
   oldestDue: string | null;
@@ -125,12 +126,14 @@ export function familySummaries(t: CoreTables, today: string): FamilySummary[] {
     const overdueDues = dues.filter((d) => d.due_date < today);
     const oldest = dues[0]?.due_date ?? null;
     const courseNames = new Set<string>();
+    const courseIds = new Set<string>();
     dues.forEach((d) => {
       const { title } = dueTitle({ Enrollments: t.Enrollments, Courses: t.Courses }, d);
       if (title) courseNames.add(title);
       const en = enrollments.get(d.enrollment_id);
       const c = en ? courses.get(en.course_id) : undefined;
       if (c?.name) courseNames.add(c.name);
+      if (en?.course_id) courseIds.add(en.course_id);
     });
     return {
       parentId: p.id,
@@ -138,6 +141,7 @@ export function familySummaries(t: CoreTables, today: string): FamilySummary[] {
       phone: p.phone,
       children: studentsByParent.get(p.id) ?? [],
       courses: [...courseNames],
+      courseIds: [...courseIds],
       outstanding: dues.reduce((s, d) => s + num(d.balance), 0),
       overdue: overdueDues.reduce((s, d) => s + num(d.balance), 0),
       oldestDue: oldest,
