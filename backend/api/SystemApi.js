@@ -159,6 +159,7 @@ const SystemApi = (() => {
 
   function migrate(payload, ctx) {
     const report = Migrate.run();
+    installTriggers();
     Db.withLock(() => Audit.log('system.migrate', '_meta', '', JSON.stringify(report).slice(0, 500), ctx));
     return report;
   }

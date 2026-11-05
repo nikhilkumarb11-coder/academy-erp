@@ -22,7 +22,7 @@ const BACKEND_FILES = [
   'Main.js', 'Setup.js',
 ];
 const SOURCE = BACKEND_FILES.map((f) => `// ---- ${f}\n${readFileSync(join(repo, 'backend', f), 'utf8')}`).join('\n');
-const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db, dailyBackup, onSheetEdit })';
+const EXPORTS = '\n;({ doPost, doGet, setupTenant, Migrate, Db, dailyBackup, weeklyBackup, onSheetEdit, installTriggers })';
 
 export function loadPreset(id) {
   return JSON.parse(readFileSync(join(repo, 'presets', `${id}.json`), 'utf8'));

@@ -30,7 +30,7 @@ function installTriggers() {
   const wanted = [
     { handler: 'generateMonthlyDues', build: (t) => t.timeBased().onMonthDay(1).atHour(6) },
     { handler: 'createRecurringExpenses', build: (t) => t.timeBased().everyDays(1).atHour(7) },
-    { handler: 'dailyBackup', build: (t) => t.timeBased().everyDays(1).atHour(2) },
+    { handler: 'weeklyBackup', build: (t) => t.timeBased().everyWeeks(1).atHour(2) },
     { handler: 'onSheetEdit', build: (t) => t.forSpreadsheet(Util.prop('SPREADSHEET_ID', true)).onEdit() },
     // { handler: 'reconcilePaymentLinks', build: (t) => t.timeBased().everyMinutes(15) },       // phase 4
   ];

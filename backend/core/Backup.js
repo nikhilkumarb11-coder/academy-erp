@@ -1,13 +1,13 @@
 /**
  * Spreadsheet backups (PRD §6.10, §8): a full copy of the data spreadsheet in a Drive folder.
  * The folder is created on first use and remembered in the BACKUP_FOLDER_ID Script Property.
- * The newest KEEP copies are kept; older ones are moved to Drive's trash (recoverable for 30 days).
+ * Only the newest KEEP copies are kept; older ones are moved to Drive's trash (recoverable for 30 days).
  * The list of copies lives in _meta.backups so retention never has to scan Drive.
  */
 const Backup = (() => {
-  const KEEP = 30;
-  /** dailyBackup skips when a backup (manual or automatic) is younger than this. */
-  const MIN_HOURS_BETWEEN_AUTO = 20;
+  const KEEP = 1;
+  /** weeklyBackup skips when a backup (manual or automatic) is younger than this. */
+  const MIN_HOURS_BETWEEN_AUTO = 6 * 24;
 
   function folder() {
     const id = Util.prop('BACKUP_FOLDER_ID');
@@ -38,7 +38,7 @@ const Backup = (() => {
     return { last: all[0] || null, count: all.length, keep: KEEP };
   }
 
-  /** Copies the spreadsheet now. kind: 'manual' | 'daily'. */
+  /** Copies the spreadsheet now. kind: 'manual' | 'weekly'. */
   function run(kind) {
     const at = Util.nowIso();
     const name = `${Db.getMap('Settings').academy_name || 'Academy'} backup ${at.slice(0, 16).replace('T', ' ')}`;
@@ -67,9 +67,14 @@ const Backup = (() => {
   return { run, status, isDue, KEEP };
 })();
 
-/** Time-driven trigger (daily, 02:00). */
+/** Time-driven trigger (weekly, 02:00). Kept as dailyBackup for older installs that still point at this name. */
 function dailyBackup() {
+  weeklyBackup();
+}
+
+/** Time-driven trigger (weekly, 02:00). */
+function weeklyBackup() {
   if (!Backup.isDue()) return;
-  const entry = Backup.run('daily');
-  Db.withLock(() => Audit.log('system.backup', '_meta', entry.id, `Daily backup ${entry.name}`, { device: 'system' }));
+  const entry = Backup.run('weekly');
+  Db.withLock(() => Audit.log('system.backup', '_meta', entry.id, `Weekly backup ${entry.name}`, { device: 'system' }));
 }

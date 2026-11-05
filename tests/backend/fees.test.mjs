@@ -370,7 +370,7 @@ describe('attendance', () => {
 describe('deploy upkeep', () => {
   it('installs the scheduled triggers and self-migrates after a schema change', async () => {
     const be = createBackend();
-    assert.deepEqual(be.state.triggers.map((t) => t.handler), ['generateMonthlyDues', 'createRecurringExpenses', 'dailyBackup', 'onSheetEdit']);
+    assert.deepEqual(be.state.triggers.map((t) => t.handler), ['generateMonthlyDues', 'createRecurringExpenses', 'weeklyBackup', 'onSheetEdit']);
     const token = await be.login();
     const meta = () => Object.fromEntries(be.sheetRows('_meta').map((r) => [r.key, r.value]));
     assert.ok(meta().schema_signature);

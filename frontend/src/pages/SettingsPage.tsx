@@ -179,7 +179,7 @@ interface BackupEntry {
   url: string;
   name: string;
   at: string;
-  kind: 'manual' | 'daily';
+  kind: 'manual' | 'weekly' | 'daily';
 }
 
 interface BackupStatus {
@@ -204,8 +204,10 @@ function BackupSettings() {
     <Card>
       <h2 className="mb-1 text-lg font-semibold">Backups</h2>
       <p className="mb-4 text-sm text-muted">
-        A full copy of the academy spreadsheet is saved to your Google Drive every night at 2 AM.
-        The newest {status.data?.keep ?? 30} copies are kept; older ones move to the Drive trash.
+        A full copy of the academy spreadsheet is saved to your Google Drive once a week.
+        {(status.data?.keep ?? 1) === 1
+          ? 'Only the latest copy is kept; the previous one moves to the Drive trash.'
+          : `The newest ${status.data?.keep} copies are kept; older ones move to the Drive trash.`}
       </p>
       <dl className="mb-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
         <dt className="text-muted">Last backup</dt>

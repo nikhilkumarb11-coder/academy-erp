@@ -13,7 +13,7 @@ async function seeded() {
 describe('backups', () => {
   it('copies the spreadsheet into a backup folder and remembers it', async () => {
     const { be, token } = await seeded();
-    assert.deepEqual(await be.ok('system.backupStatus', {}, token), { last: null, count: 0, keep: 30 });
+    assert.deepEqual(await be.ok('system.backupStatus', {}, token), { last: null, count: 0, keep: 1 });
 
     const res = await be.ok('system.backup', {}, token);
     assert.match(res.backup.name, / backup 2026-10-13 10:\d\d$/);
@@ -27,36 +27,45 @@ describe('backups', () => {
     assert.equal(copy.copyOf, 'sheet-under-test');
     assert.equal(copy.folderId, folderId);
 
-    await be.ok('system.backup', {}, token);
+    const second = await be.ok('system.backup', {}, token);
     assert.equal(be.state.props.BACKUP_FOLDER_ID, folderId, 'reuses the folder');
-    assert.equal((await be.ok('system.backupStatus', {}, token)).count, 2);
+    assert.equal((await be.ok('system.backupStatus', {}, token)).count, 1);
+    assert.equal(be.state.drive.files[res.backup.id].trashed, true);
+    assert.equal(second.backup.id, (await be.ok('system.backupStatus', {}, token)).last.id);
   });
 
-  it('keeps the newest 30 copies and trashes older ones', async () => {
+  it('keeps only the newest copy and trashes older ones', async () => {
     const { be, token } = await seeded();
-    const ids = [];
-    for (let i = 0; i < 32; i++) ids.push((await be.ok('system.backup', {}, token)).backup.id);
+    const first = (await be.ok('system.backup', {}, token)).backup.id;
+    const second = (await be.ok('system.backup', {}, token)).backup.id;
     const status = await be.ok('system.backupStatus', {}, token);
-    assert.equal(status.count, 30);
-    assert.equal(status.last.id, ids[31]);
-    assert.equal(be.state.drive.files[ids[0]].trashed, true);
-    assert.equal(be.state.drive.files[ids[1]].trashed, true);
-    assert.equal(be.state.drive.files[ids[2]].trashed, false);
+    assert.equal(status.count, 1);
+    assert.equal(status.keep, 1);
+    assert.equal(status.last.id, second);
+    assert.equal(be.state.drive.files[first].trashed, true);
+    assert.equal(be.state.drive.files[second].trashed, false);
   });
 
-  it('dailyBackup skips when a backup is less than 20 hours old', async () => {
+  it('weeklyBackup skips when a backup is less than 6 days old', async () => {
     const { be, token } = await seeded();
-    be.execution().dailyBackup();
-    be.execution().dailyBackup();
+    be.execution().weeklyBackup();
+    be.execution().weeklyBackup();
     let status = await be.ok('system.backupStatus', {}, token);
     assert.equal(status.count, 1);
-    assert.equal(status.last.kind, 'daily');
+    assert.equal(status.last.kind, 'weekly');
 
     be.state.today = '2026-10-14';
-    be.execution().dailyBackup();
+    be.execution().weeklyBackup();
+    const still = await be.login();
+    status = await be.ok('system.backupStatus', {}, still);
+    assert.equal(status.count, 1, 'next day is still within the 6-day skip window');
+
+    be.state.today = '2026-10-20';
+    be.execution().weeklyBackup();
     const fresh = await be.login();
     status = await be.ok('system.backupStatus', {}, fresh);
-    assert.equal(status.count, 2);
+    assert.equal(status.count, 1);
+    assert.equal(status.last.kind, 'weekly');
   });
 
   it('requires a session', async () => {
