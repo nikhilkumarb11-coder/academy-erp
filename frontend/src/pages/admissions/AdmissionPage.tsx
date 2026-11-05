@@ -434,27 +434,66 @@ export function AdmissionPage() {
       )}
 
       <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface px-4 py-3 lg:static lg:mt-2 lg:rounded-2xl lg:border">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <div className="text-sm">
-            <p className="font-medium">
-              {children.length} {children.length === 1 ? 'child' : 'children'} · {totals.courses} {totals.courses === 1 ? labels.course.toLowerCase() : labels.courses.toLowerCase()}
-            </p>
-            {(totals.courses > 0 || collectTotal > 0) && (
-              <p className="text-xs text-muted">
-                {totals.courseFees > 0 && <>Joining-month fees {formatMoney(totals.courseFees, locale.currencySymbol)} (full month)</>}
-                {totals.courseFees > 0 && totals.admissionFees > 0 && ' · '}
-                {totals.admissionFees > 0 && <>Admission {formatMoney(totals.admissionFees, locale.currencySymbol)}</>}
-                {totals.unpriced > 0 && <span className="text-warning"> · {totals.unpriced} without a fee</span>}
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2 text-sm">
+            <div>
+              <p className="font-medium">
+                {children.length} {children.length === 1 ? 'child' : 'children'} · {totals.courses} {totals.courses === 1 ? labels.course.toLowerCase() : labels.courses.toLowerCase()}
               </p>
-            )}
+              {(totals.courseFees > 0 || totals.admissionFees > 0 || totals.unpriced > 0) && (
+                <p className="text-xs text-muted">
+                  {totals.courseFees > 0 && <>Joining-month fee {formatMoney(totals.courseFees, locale.currencySymbol)}</>}
+                  {totals.courseFees > 0 && totals.admissionFees > 0 && ' · '}
+                  {totals.admissionFees > 0 && <>Admission {formatMoney(totals.admissionFees, locale.currencySymbol)}</>}
+                  {totals.unpriced > 0 && <span className="text-warning"> · {totals.unpriced} without a fee</span>}
+                </p>
+              )}
+            </div>
             {collectTotal > 0 && (
-              <label className="mt-1 inline-flex items-center gap-2 text-xs">
-                <input type="checkbox" checked={collectNow} onChange={(e) => setCollectNow(e.target.checked)} className="size-4 accent-[var(--tenant-primary)]" />
-                Collect payment after saving{totals.courseFees > 0 && totals.admissionFees === 0 ? ' (as advance)' : ''}
-              </label>
+              <fieldset className="space-y-1.5">
+                <legend className="sr-only">Payment after save</legend>
+                <label className={clsx(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition',
+                  collectNow ? 'border-primary bg-primary-soft' : 'border-line bg-canvas hover:border-primary/40',
+                )}>
+                  <input
+                    type="radio"
+                    name="admission-pay"
+                    className="mt-0.5 size-4 accent-[var(--tenant-primary)]"
+                    checked={collectNow}
+                    onChange={() => setCollectNow(true)}
+                  />
+                  <span>
+                    <span className="block font-medium">Collect {formatMoney(collectTotal, locale.currencySymbol)} now</span>
+                    <span className="block text-xs text-muted">
+                      {totals.courseFees > 0
+                        ? 'Opens the payment screen after save — pays the joining-month due'
+                        : 'Opens the payment screen after save'}
+                      {totals.admissionFees > 0 && totals.courseFees > 0 ? ' (includes admission)' : ''}
+                      .
+                    </span>
+                  </span>
+                </label>
+                <label className={clsx(
+                  'flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 transition',
+                  !collectNow ? 'border-primary bg-primary-soft' : 'border-line bg-canvas hover:border-primary/40',
+                )}>
+                  <input
+                    type="radio"
+                    name="admission-pay"
+                    className="mt-0.5 size-4 accent-[var(--tenant-primary)]"
+                    checked={!collectNow}
+                    onChange={() => setCollectNow(false)}
+                  />
+                  <span>
+                    <span className="block font-medium">Leave fees pending</span>
+                    <span className="block text-xs text-muted">Save only — collect later from Fees &amp; dues.</span>
+                  </span>
+                </label>
+              </fieldset>
             )}
           </div>
-          <Button type="submit">
+          <Button type="submit" className="w-full shrink-0 sm:w-auto">
             <UserPlus className="size-4" aria-hidden /> Save admission
           </Button>
         </div>
