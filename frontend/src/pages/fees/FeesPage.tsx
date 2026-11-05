@@ -22,7 +22,7 @@ type View = 'due' | 'overdue' | AgeBucket | 'credit';
 
 export function FeesPage() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'month' ? 'month' : 'families';
+  const tab = params.get('tab') === 'families' ? 'families' : 'month';
 
   return (
     <>
@@ -39,8 +39,8 @@ export function FeesPage() {
 
       <div className="mb-4 inline-flex rounded-xl border border-line bg-surface p-1" role="tablist">
         {([
-          { key: 'families', label: 'Families' },
           { key: 'month', label: 'By month' },
+          { key: 'families', label: 'Families' },
         ] as const).map((t) => (
           <button
             key={t.key}
@@ -48,8 +48,8 @@ export function FeesPage() {
             role="tab"
             aria-selected={tab === t.key}
             onClick={() => setParams((p) => {
-              if (t.key === 'families') p.delete('tab');
-              else p.set('tab', 'month');
+              if (t.key === 'month') p.delete('tab');
+              else p.set('tab', 'families');
               return p;
             }, { replace: true })}
             className={clsx('min-h-9 rounded-lg px-4 text-sm font-medium', tab === t.key ? 'bg-primary text-white' : 'text-muted')}
