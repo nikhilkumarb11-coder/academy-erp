@@ -67,8 +67,19 @@ const Backup = (() => {
   return { run, status, isDue, KEEP };
 })();
 
-/** Time-driven trigger (weekly, 02:00). Kept as dailyBackup for older installs that still point at this name. */
+/**
+ * Time-driven trigger (weekly, 02:00). Kept as dailyBackup for older installs that still point at this name.
+ * Those installs also self-heal once: reinstall triggers so the schedule becomes weekly under weeklyBackup.
+ */
 function dailyBackup() {
+  if (Util.prop('TRIGGERS_REV') !== 'weekly-v1') {
+    try {
+      installTriggers();
+      Util.setProp('TRIGGERS_REV', 'weekly-v1');
+    } catch (e) {
+      console.warn('Could not refresh triggers from dailyBackup', e && e.message);
+    }
+  }
   weeklyBackup();
 }
 
