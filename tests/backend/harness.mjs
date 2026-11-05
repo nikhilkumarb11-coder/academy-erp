@@ -45,6 +45,18 @@ class FakeSheet {
   getName() { return this.name; }
   getMaxRows() { return this.maxRows; }
   insertRowsAfter(_after, n) { this.maxRows += n; }
+  deleteRow(r) {
+    const last = this.getLastRow();
+    const maxCol = Math.max(this.getLastColumn(), 1);
+    for (let row = r; row < last; row++) {
+      for (let c = 1; c <= maxCol; c++) {
+        const next = this.cells.get(`${row + 1},${c}`);
+        if (next === undefined || next === '') this.cells.delete(`${row},${c}`);
+        else this.cells.set(`${row},${c}`, next);
+      }
+    }
+    for (let c = 1; c <= maxCol; c++) this.cells.delete(`${last},${c}`);
+  }
   setFrozenRows() {}
   getProtections() { return this.protections.slice(); }
   getLastRow() {

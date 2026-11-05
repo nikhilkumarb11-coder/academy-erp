@@ -154,6 +154,35 @@ describe('sync', () => {
     assert.equal(readsOf(be, ['Courses']), coursesRead, 'courses were only read by the admission, not by sync');
   });
 
+  it('tombstones students physically deleted from the spreadsheet', async () => {
+    const { be, token } = await seeded();
+    const boot = await be.ok('system.bootstrap', {}, token);
+    const plan = boot.FeePlans.find((p) => p.frequency === 'Monthly');
+    const adm = await be.ok('admissions.create', {
+      parent: { guardian_name: 'Asha', phone: '9000000009' },
+      students: [{ name: 'Ghost', enrollments: [{ course_id: boot.Courses[0].id, fee_plan_id: plan.id }] }],
+    }, token);
+    const studentId = adm.student_ids[0];
+    await be.ok('system.bootstrap', {}, token); // remember id set after the write
+
+    const sheet = be.state.spreadsheet.getSheetByName('Students');
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    const idCol = headers.indexOf('id') + 1;
+    const rows = sheet.getLastRow();
+    let row = 0;
+    for (let r = 2; r <= rows; r++) {
+      if (sheet.getRange(r, idCol, 1, 1).getValues()[0][0] === studentId) { row = r; break; }
+    }
+    assert.ok(row, 'student row exists');
+    sheet.deleteRow(row);
+    be.execution().onSheetEdit({ range: sheet.getRange(Math.max(2, row - 1), idCol) });
+
+    const delta = await be.ok('system.sync', { since: boot.serverTime }, token);
+    const tomb = delta.Students.find((s) => s.id === studentId);
+    assert.ok(tomb, 'sync returns a tombstone for the hard-deleted student');
+    assert.equal(String(tomb.deleted).toUpperCase() === 'TRUE' || tomb.deleted === true, true);
+  });
+
   it('picks up edits typed directly into the spreadsheet', async () => {
     const { be, token } = await seeded();
     const boot = await be.ok('system.bootstrap', {}, token);

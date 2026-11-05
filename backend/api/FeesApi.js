@@ -28,20 +28,45 @@ const FeesApi = (() => {
 
   // ---------- dues ----------
 
-  /** dues.generate { month: 'yyyy-MM', dryRun? } — idempotent. */
+  /**
+   * dues.generate { month: 'yyyy-MM', backfill?, dryRun? }
+   * One month by default. With backfill: true, bills every month from each enrolment's joining month
+   * through `month` (idempotent; already-covered periods are skipped).
+   */
   function generate(payload, ctx) {
     const month = String(payload.month || Util.today().slice(0, 7));
+    if (!Fees.isMonth(month)) throw new AppError('VALIDATION', 'Month must look like 2026-06', { field: 'month' });
     return Db.withLock(() => {
-      const result = Fees.generate(month, { dryRun: !!payload.dryRun });
-      if (!payload.dryRun) {
-        Audit.log('dues.generate', 'FeeDues', month, `${result.created.length} created, ${result.skipped.length} skipped`, ctx);
+      const months = payload.backfill ? Fees.backfillMonths(month) : [month];
+      const dryRun = !!payload.dryRun;
+      const changes = {};
+      const createdRows = [];
+      const skippedByKey = {};
+      const virtualDues = [];
+      months.forEach((m) => {
+        const result = Fees.generate(m, { dryRun, virtualDues });
+        if (!dryRun) Fees.mergeChanges(changes, result.changes);
+        const rows = result.created || [];
+        rows.forEach((r) => createdRows.push(r));
+        if (dryRun) virtualDues.push(...rows);
+        (result.skipped || []).forEach((s) => {
+          const key = `${s.enrollment_id}:${s.reason}`;
+          if (!skippedByKey[key]) skippedByKey[key] = s;
+        });
+      });
+      if (!dryRun) {
+        const label = months.length === 1 ? month : `${months[0]}…${months[months.length - 1]}`;
+        Audit.log('dues.generate', 'FeeDues', label, `${createdRows.length} created, ${Object.keys(skippedByKey).length} skipped`, ctx);
       }
       return {
-        changes: result.changes,
+        changes: dryRun ? {} : changes,
         month,
-        created: result.created.length,
-        total: result.created.reduce((s, d) => s + Fees.num(d.amount_due), 0),
-        skipped: result.skipped,
+        from: months[0],
+        through: months[months.length - 1],
+        months: months.length,
+        created: createdRows.length,
+        total: createdRows.reduce((s, d) => s + Fees.num(d.amount_due), 0),
+        skipped: Object.values(skippedByKey),
       };
     });
   }

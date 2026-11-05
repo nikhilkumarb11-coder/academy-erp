@@ -415,6 +415,9 @@ export function AddChargeSheet({ parentId, studentId, onClose }: { parentId: str
 
 interface GenerateResult extends WriteResult {
   month: string;
+  from?: string;
+  through?: string;
+  months?: number;
   created: number;
   total: number;
   skipped: { enrollment_id: string; student: string; course: string; reason: string }[];
@@ -427,40 +430,82 @@ export function GenerateDuesSheet({ onClose }: { onClose: () => void }) {
   const preview = useWrite<Record<string, unknown>, GenerateResult>('dues.generate');
   const thisMonth = todayIso().slice(0, 7);
   const [month, setMonth] = useState(thisMonth);
+  const [backfill, setBackfill] = useState(true);
+  /** Fingerprint of the last successful preview request. */
+  const [previewed, setPreviewed] = useState('');
+  const want = `${month}:${backfill ? '1' : '0'}`;
   const p = preview.data;
+  const ready = !!p && previewed === want;
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    if (!p || p.month !== month) {
-      preview.mutate({ month, dryRun: true });
+    if (!ready) {
+      preview.mutate({ month, backfill, dryRun: true }, {
+        onSuccess: () => setPreviewed(want),
+      });
       return;
     }
-    generate.mutate({ month }, {
-      onSuccess: (res) => { toast(res.created ? `${res.created} dues created for ${monthLabel(month)}` : `Nothing new to bill for ${monthLabel(month)}`); onClose(); },
+    generate.mutate({ month, backfill }, {
+      onSuccess: (res) => {
+        if (!res.created) toast(backfill ? 'Nothing new to bill through this month' : `Nothing new to bill for ${monthLabel(month)}`);
+        else if (backfill && res.from && res.through && res.from !== res.through) {
+          toast(`${res.created} dues created (${monthLabel(res.from)} – ${monthLabel(res.through)})`);
+        } else toast(`${res.created} dues created for ${monthLabel(month)}`);
+        onClose();
+      },
     });
   }
 
-  const ready = p && p.month === month;
   return (
     <Sheet open title="Generate dues" onClose={onClose} footer={<Footer formId="gen-form" saving={generate.isPending || preview.isPending} label={ready ? `Create ${p.created} dues` : 'Preview'} />}>
       <form id="gen-form" onSubmit={submit} className="space-y-4">
-        <p className="text-sm text-muted">Dues are created automatically on the 1st of every month. Use this to bill a month now or catch up a missed one. It never bills the same period twice.</p>
-        <SelectField label="Month" value={month} onChange={(e) => setMonth(e.target.value)}>
-          {[-3, -2, -1, 0].map((n) => {
+        <p className="text-sm text-muted">
+          Dues are created automatically on the 1st of every month. Use this to bill a month now, or catch up from each student&apos;s joining month through the month you pick. It never bills the same period twice.
+        </p>
+        <SelectField
+          label="Through month"
+          value={month}
+          onChange={(e) => { setMonth(e.target.value); setPreviewed(''); }}
+        >
+          {Array.from({ length: 12 }, (_, i) => -i).map((n) => {
             const m = addMonths(thisMonth, n);
             return <option key={m} value={m}>{monthLabel(m)}{n === 0 ? ' (this month)' : ''}</option>;
           })}
         </SelectField>
+        <label className="flex items-start gap-3 rounded-xl border border-line bg-surface px-3 py-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-[var(--tenant-primary)]"
+            checked={backfill}
+            onChange={(e) => { setBackfill(e.target.checked); setPreviewed(''); }}
+          />
+          <span>
+            <span className="font-medium">Catch up from joining month</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Creates every missing month from when each student joined through the month above (full fee, no prorate).
+            </span>
+          </span>
+        </label>
         {ready && (
           <div className="space-y-2">
             <Alert tone={p.created ? 'info' : 'success'}>
-              {p.created ? <>{p.created} new dues totalling <strong>{money(p.total)}</strong>.</> : 'Every active enrolment is already billed for this month.'}
+              {p.created
+                ? (
+                  <>
+                    {p.created} new dues totalling <strong>{money(p.total)}</strong>
+                    {backfill && p.from && p.through && p.from !== p.through
+                      ? <> ({monthLabel(p.from)} – {monthLabel(p.through)})</>
+                      : null}
+                    .
+                  </>
+                )
+                : (backfill ? 'Every active enrolment is already billed through this month.' : 'Every active enrolment is already billed for this month.')}
             </Alert>
             {p.skipped.length > 0 && (
               <div className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm">
                 <p className="mb-1 font-medium text-warning">Skipped {p.skipped.length}</p>
                 <ul className="space-y-0.5 text-muted">
-                  {p.skipped.slice(0, 8).map((s) => <li key={s.enrollment_id}>{s.student} · {s.course}: {s.reason}</li>)}
+                  {p.skipped.slice(0, 8).map((s) => <li key={`${s.enrollment_id}:${s.reason}`}>{s.student} · {s.course}: {s.reason}</li>)}
                   {p.skipped.length > 8 && <li>…and {p.skipped.length - 8} more</li>}
                 </ul>
               </div>

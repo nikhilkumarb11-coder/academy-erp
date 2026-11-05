@@ -11,17 +11,65 @@ const SystemApi = (() => {
    * Everything the client caches at login (PRD §8 performance). The snapshot is kept in CacheService,
    * keyed by the data revision, so repeat logins and full reloads skip reading 21 tabs. A cached
    * snapshot keeps the serverTime it was read at, so the client's next sync still covers later edits.
+   * Pass `{ force: true }` (Settings → Refresh all data) to bypass the cache and re-read every tab.
    */
-  function bootstrap() {
+  function bootstrap(payload) {
     Migrate.ensureCurrent();
     ExpensesApi.runRecurringIfDue();
     const key = snapshotKey();
-    const hit = cachedSnapshot(key);
-    if (hit) return hit;
+    if (!(payload && payload.force)) {
+      const hit = cachedSnapshot(key);
+      if (hit) return hit;
+    }
     const data = { settings: Db.getMap('Settings'), serverTime: Util.nowIso() };
     BOOTSTRAP_TABS.forEach((tab) => { data[tab] = Db.all(tab); });
+    rememberIdSets();
     storeSnapshot(key, data);
     return data;
+  }
+
+  /** CacheService key for the sorted id list of a bootstrap tab (used to spot hard deletes). */
+  function idSetKey(tab) {
+    return `ids:${API_VERSION}:${tab}`;
+  }
+
+  /** Remembers every id still in the sheet (including soft-deleted rows) so the next sync can tombstone hard deletes. */
+  function rememberIdSets() {
+    const cache = CacheService.getScriptCache();
+    const values = {};
+    BOOTSTRAP_TABS.forEach((tab) => {
+      const ids = Db.all(tab, { includeDeleted: true }).map((r) => r.id).filter(Boolean).sort();
+      const body = ids.join('\n');
+      if (body.length < 90000) values[idSetKey(tab)] = body;
+    });
+    try {
+      if (Object.keys(values).length) cache.putAll(values, SNAPSHOT_TTL_S);
+    } catch (e) {
+      console.warn('Could not cache id sets for hard-delete sync', e && e.message);
+    }
+  }
+
+  /**
+   * Rows that used to be in the sheet but were physically deleted (not soft-deleted).
+   * Soft deletes still arrive via changedSince with deleted=TRUE; hard deletes have no row left to send.
+   */
+  function hardDeleteTombstones(tab) {
+    const cache = CacheService.getScriptCache();
+    const prev = cache.get(idSetKey(tab));
+    const existing = {};
+    Db.all(tab, { includeDeleted: true }).forEach((r) => { if (r.id) existing[r.id] = true; });
+    const now = Util.nowIso();
+    const tombs = [];
+    if (prev) {
+      String(prev).split('\n').forEach((id) => {
+        if (id && !existing[id]) tombs.push({ id, deleted: true, updated_at: now });
+      });
+    }
+    const body = Object.keys(existing).sort().join('\n');
+    if (body.length < 90000) {
+      try { cache.put(idSetKey(tab), body, SNAPSHOT_TTL_S); } catch (e) { /* ignore */ }
+    }
+    return tombs;
   }
 
   const SNAPSHOT_CHUNK = 30000; // characters; CacheService values are capped at 100 KB (UTF-8)
@@ -96,7 +144,15 @@ const SystemApi = (() => {
 
     const data = { serverTime };
     if (!unchanged('Settings')) data.settings = Db.getMap('Settings');
-    BOOTSTRAP_TABS.forEach((tab) => { data[tab] = unchanged(tab) ? [] : Db.changedSince(tab, since); });
+    BOOTSTRAP_TABS.forEach((tab) => {
+      if (unchanged(tab)) {
+        data[tab] = [];
+        return;
+      }
+      const changed = Db.changedSince(tab, since);
+      const tombs = hardDeleteTombstones(tab);
+      data[tab] = tombs.length ? changed.concat(tombs) : changed;
+    });
     if (Object.keys(missing).length) Util.setProps(missing);
     return data;
   }

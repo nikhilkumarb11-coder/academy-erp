@@ -44,8 +44,8 @@ const PeopleApi = (() => {
   }
 
   /**
-   * Creates the first billable month's dues once that month has arrived (the month after join).
-   * Joining-month admissions create no dues yet — they appear on the 1st (or the next generate).
+   * Creates the joining month's dues once that month has arrived (full fee, no prorate).
+   * An advance on the parent is applied afterwards and clears that due when it covers it.
    */
   function billNewEnrollments(ids) {
     if (!ids.length) return {};
@@ -55,10 +55,8 @@ const PeopleApi = (() => {
       const e = Db.find('Enrollments', id);
       if (!e || e.status !== 'Active') return;
       const start = String(e.start_date || '').slice(0, 7);
-      if (!Fees.isMonth(start)) return;
-      const first = Fees.addMonths(start, 1);
-      if (first > today) return;
-      (byMonth[first] = byMonth[first] || []).push(id);
+      if (!Fees.isMonth(start) || start > today) return;
+      (byMonth[start] = byMonth[start] || []).push(id);
     });
     const changes = {};
     Object.keys(byMonth).forEach((month) => {

@@ -38,8 +38,8 @@ Status: ✅ implemented (phase 0) · ⏳ planned (phase shown).
 | `system.ping` | public | – | apiVersion, schemaVersion, serverTime | ✅ |
 | `auth.login` | public | password | token, expiresAt | ✅ |
 | `auth.changePassword` | ✓ | current, next | new token (other devices logged out) | ✅ |
-| `system.bootstrap` | ✓ | – | settings + all `BOOTSTRAP_TABS` rows | ✅ |
-| `system.sync` | ✓ | since (ISO) | settings + rows changed since then | ✅ |
+| `system.bootstrap` | ✓ | force? | settings + all `BOOTSTRAP_TABS` rows (`force: true` bypasses the server snapshot cache) | ✅ |
+| `system.sync` | ✓ | since (ISO) | settings + rows changed since then; hard-deleted sheet rows arrive as `{ id, deleted: true }` tombstones | ✅ |
 | `system.migrate` | ✓ | – | migration report | ✅ |
 | `system.seed` | ✓ | preset, force? | counts | ✅ |
 | `settings.update` | ✓ | {key: value} | settings | ✅ |
@@ -78,7 +78,7 @@ Dues, payments, allocations, receipts and holidays are cached on the device (boo
 
 | Action | Payload |
 |---|---|
-| `dues.generate` | month (`yyyy-MM`), dryRun? → `{ changes, month, created, total, skipped[] }`. Idempotent: never bills a period already covered. |
+| `dues.generate` | month (`yyyy-MM`), backfill?, dryRun? → `{ changes, month, from, through, months, created, total, skipped[] }`. Idempotent. Billing starts in the joining month at the full plan amount (no prorate). With `backfill: true`, creates every missing month from each enrolment's joining month through `month`. |
 | `dues.addCharge` | student_id, charge_item_id? or label, amount?, due_date?, note? |
 | `dues.adjust` | id, note (required), and any of amount_due (marks prorated), discount, adjustment (absolute values), waive |
 | `dues.remove` | id, note. Refused once anything is paid against the due. |

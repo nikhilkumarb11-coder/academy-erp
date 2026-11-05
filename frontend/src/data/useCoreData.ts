@@ -35,14 +35,14 @@ export function useCoreData() {
         const latest = queryClient.getQueryData<CoreData>(key) ?? cached;
         return dropStalePending(applyDelta(latest, delta));
       }
-      const snapshot = await api<CoreSnapshot>('system.bootstrap');
+      const snapshot = await api<CoreSnapshot>('system.bootstrap', {});
       return carryPending(queryClient.getQueryData<CoreData>(key), fromSnapshot(snapshot));
     },
   });
 
-  /** Discards the cache and reloads everything (Settings → Refresh all data). */
+  /** Discards the cache and reloads everything (Settings → Refresh all data). Bypasses the server snapshot cache. */
   const fullReload = useCallback(async () => {
-    const snapshot = await api<CoreSnapshot>('system.bootstrap');
+    const snapshot = await api<CoreSnapshot>('system.bootstrap', { force: true });
     queryClient.setQueryData(key, carryPending(queryClient.getQueryData<CoreData>(key), fromSnapshot(snapshot)));
   }, [api, queryClient, key]);
 

@@ -441,7 +441,7 @@ export function AdmissionPage() {
             </p>
             {(totals.courses > 0 || collectTotal > 0) && (
               <p className="text-xs text-muted">
-                {totals.courseFees > 0 && <>Next month’s fees {formatMoney(totals.courseFees, locale.currencySymbol)} (from next month)</>}
+                {totals.courseFees > 0 && <>Joining-month fees {formatMoney(totals.courseFees, locale.currencySymbol)} (full month)</>}
                 {totals.courseFees > 0 && totals.admissionFees > 0 && ' · '}
                 {totals.admissionFees > 0 && <>Admission {formatMoney(totals.admissionFees, locale.currencySymbol)}</>}
                 {totals.unpriced > 0 && <span className="text-warning"> · {totals.unpriced} without a fee</span>}

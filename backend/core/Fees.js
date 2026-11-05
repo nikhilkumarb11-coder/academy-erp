@@ -1,10 +1,12 @@
 /**
  * Dues engine (PRD §6.3, addendum G8). Callers must hold Db.withLock.
  *
- * A recurring due covers one fee-plan period of an enrollment. Billing never starts in the joining
- * month — the first period begins the calendar month after start_date. Generating dues for a month
- * creates the period containing that month unless an existing due already covers it, so running it
- * twice (or after an annual payment) never bills twice (PRD rule 4). Future months are not billed
+ * A recurring due covers one fee-plan period of an enrollment. Billing starts in the joining month
+ * (the calendar month of start_date), at the full plan amount — mid-month joins are not prorated.
+ * An advance paid at admission sits as credit and is applied to that first due, so pending dues then
+ * begin the following month; with no advance, the joining month stays pending. Generating dues for a
+ * month creates the period containing that month unless an existing due already covers it, so running
+ * it twice (or after an annual payment) never bills twice (PRD rule 4). Future months are not billed
  * early: a due only appears once that month has arrived.
  *
  * Money lives in three places: FeeDues (what is owed), Payments (what came in) and PaymentAllocations
@@ -112,15 +114,34 @@ const Fees = (() => {
     return Math.min(28, Math.max(1, Number(Db.getMap('Settings').due_day) || 5));
   }
 
-  /** First month that may be billed: the calendar month after the join month (never the joining month). */
+  /** First month that may be billed: the calendar month of start_date (joining month, full fee). */
   function firstBillMonth(enrollment) {
     const startMonth = monthOf(enrollment.start_date);
-    return isMonth(startMonth) ? addMonths(startMonth, 1) : '';
+    return isMonth(startMonth) ? startMonth : '';
+  }
+
+  /**
+   * Months to generate when catching up: from the earliest active enrolment's joining month through
+   * `through` (inclusive), never past today. Empty when `through` is invalid.
+   */
+  function backfillMonths(through) {
+    if (!isMonth(through)) return [];
+    const todayMonth = monthOf(Util.today());
+    const end = isMonth(todayMonth) && through > todayMonth ? todayMonth : through;
+    let start = end;
+    Db.all('Enrollments').forEach((e) => {
+      if (e.status !== 'Active') return;
+      const first = firstBillMonth(e);
+      if (isMonth(first) && first < start) start = first;
+    });
+    const months = [];
+    for (let m = start; m <= end; m = addMonths(m, 1)) months.push(m);
+    return months;
   }
 
   /**
    * The period of `enrollment` that contains `month`, or null when the enrollment does not run that month.
-   * Billing never starts in the joining month — the first due is always the following month.
+   * Billing starts in the joining month at the full plan amount (no prorate).
    * Future months are not billed until they arrive (`month` must be ≤ today).
    * `existing` are the enrollment's recurring dues; a period already partly billed (e.g. after a plan change)
    * restarts at `month` instead of overlapping.
@@ -152,8 +173,8 @@ const Fees = (() => {
   }
 
   /**
-   * Soft-deletes unpaid recurring dues that should never have existed: periods before the first
-   * billable month (joining-month dues), or periods still in the future.
+   * Soft-deletes unpaid recurring dues that should never have existed: periods before the joining
+   * month, or periods still in the future.
    */
   function dropPrematureDues() {
     const todayMonth = monthOf(Util.today());
@@ -169,7 +190,7 @@ const Fees = (() => {
       if (!isMonth(period)) return;
       if (period < first || (isMonth(todayMonth) && period > todayMonth)) {
         const note = period < first
-          ? 'Removed: billing starts the month after joining'
+          ? 'Removed: billing starts in the joining month'
           : 'Removed: dues are not created before their month';
         const line = `${Util.today()}: ${note}`;
         patches.push({ id: d.id, deleted: true, notes: d.notes ? `${d.notes}\n${line}` : line });
@@ -197,6 +218,11 @@ const Fees = (() => {
     const plans = new Map(Db.all('FeePlans', { includeDeleted: true }).map((p) => [p.id, p]));
     const duesByEnrollment = {};
     Db.all('FeeDues').forEach((d) => {
+      if (d.kind !== 'Recurring' || !d.enrollment_id) return;
+      (duesByEnrollment[d.enrollment_id] = duesByEnrollment[d.enrollment_id] || []).push(d);
+    });
+    // dryRun backfill: periods proposed earlier in the same request count as already billed
+    (options.virtualDues || []).forEach((d) => {
       if (d.kind !== 'Recurring' || !d.enrollment_id) return;
       (duesByEnrollment[d.enrollment_id] = duesByEnrollment[d.enrollment_id] || []).push(d);
     });
@@ -310,6 +336,6 @@ const Fees = (() => {
   return {
     monthOf, addMonths, monthDiff, monthLabel, isMonth, daysIn,
     num, monthlyFee, planAmount, net, settle, isOpen, byDueOrder,
-    addChanges, mergeChanges, firstBillMonth, periodFor, dropPrematureDues, generate, creditOf, applyCredit,
+    addChanges, mergeChanges, firstBillMonth, backfillMonths, periodFor, dropPrematureDues, generate, creditOf, applyCredit,
   };
 })();
