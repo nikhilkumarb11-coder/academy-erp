@@ -149,6 +149,35 @@ describe('dues engine', () => {
     assert.equal(again.created, 0, 'idempotent');
   });
 
+  it('moving a course start date earlier creates the missing months through today', async () => {
+    await f.at('2026-11-05');
+    await f.be.ok('dues.generate', { month: '2026-11' }, f.token);
+    const karate = f.be.sheetRows('Enrollments').find((e) => e.course_id === f.course('Karate').id);
+    const before = f.dues().filter((d) => d.enrollment_id === karate.id).map((d) => d.period_label).sort();
+    assert.deepEqual(before, ['Nov 2026', 'Oct 2026'].sort());
+
+    const saved = await f.be.ok('enrollments.save', {
+      id: karate.id,
+      course_id: karate.course_id,
+      fee_plan_id: karate.fee_plan_id,
+      batch_id: karate.batch_id || '',
+      start_date: '2026-08-01',
+      monthly_fee_override: karate.monthly_fee_override,
+      discount_note: karate.discount_note || '',
+    }, f.token);
+    assert.equal(saved.changes.Enrollments[0].start_date, '2026-08-01');
+    const created = (saved.changes.FeeDues || []).filter((d) => !d.deleted).map((d) => d.period_label).sort();
+    assert.deepEqual(created, ['Aug 2026', 'Sep 2026']);
+    const labels = f.dues().filter((d) => d.enrollment_id === karate.id).map((d) => d.period_label).sort();
+    assert.deepEqual(labels, ['Aug 2026', 'Nov 2026', 'Oct 2026', 'Sep 2026'].sort());
+  });
+
+  it('a backdated admission bills every month from joining through today', async () => {
+    const g = await family({ start: '2026-08-01', today: '2026-11-05', bill: false });
+    const karate = g.dues().filter((d) => d.enrollment_id === g.be.sheetRows('Enrollments').find((e) => e.course_id === g.course('Karate').id).id);
+    assert.deepEqual(karate.map((d) => d.period_label).sort(), ['Aug 2026', 'Nov 2026', 'Oct 2026', 'Sep 2026'].sort());
+  });
+
   it('adjusts, prorates, waives and removes dues with notes', async () => {
     f = await family();
     const karate = f.dueFor('Karate');

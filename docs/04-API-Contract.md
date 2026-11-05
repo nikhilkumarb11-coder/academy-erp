@@ -58,7 +58,7 @@ Each `save` inserts when `id` is missing and updates otherwise. Each returns the
 | `admissions.create` | parent (new or existing id), students[], enrollments[], advance? | One lock and one audit entry. Creates dues for the first period. |
 | `students.save` | student | |
 | `students.setStatus` | id, status, reason | Ends active enrollments when the student is Dropped or Completed |
-| `enrollments.save` / `enrollments.setStatus` | | |
+| `enrollments.save` / `enrollments.setStatus` | `enrollments.save` (create or edit) catches up recurring dues from the course start month through today. | |
 | `students.profile` | id | Enrollments, dues, payments, attendance summary |
 
 ### Attendance (phase 3)

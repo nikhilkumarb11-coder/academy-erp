@@ -44,24 +44,29 @@ const PeopleApi = (() => {
   }
 
   /**
-   * Creates the joining month's dues once that month has arrived (full fee, no prorate).
-   * An advance on the parent is applied afterwards and clears that due when it covers it.
+   * Bills each enrolment from its joining month through today (full fee, no prorate).
+   * Idempotent: months already covered are skipped. An advance on the parent is applied
+   * afterwards and clears those dues when it covers them.
    */
   function billNewEnrollments(ids) {
     if (!ids.length) return {};
     const today = Util.today().slice(0, 7);
-    const byMonth = {};
+    if (!Fees.isMonth(today)) return {};
+    const active = [];
+    let from = today;
     ids.forEach((id) => {
       const e = Db.find('Enrollments', id);
       if (!e || e.status !== 'Active') return;
-      const start = String(e.start_date || '').slice(0, 7);
-      if (!Fees.isMonth(start) || start > today) return;
-      (byMonth[start] = byMonth[start] || []).push(id);
+      const first = Fees.firstBillMonth(e);
+      if (!Fees.isMonth(first) || first > today) return;
+      active.push(id);
+      if (first < from) from = first;
     });
+    if (!active.length) return {};
     const changes = {};
-    Object.keys(byMonth).forEach((month) => {
-      Fees.mergeChanges(changes, Fees.generate(month, { enrollmentIds: byMonth[month] }).changes);
-    });
+    for (let month = from; month <= today; month = Fees.addMonths(month, 1)) {
+      Fees.mergeChanges(changes, Fees.generate(month, { enrollmentIds: active }).changes);
+    }
     return changes;
   }
 
@@ -277,7 +282,10 @@ const PeopleApi = (() => {
         const fields = enrollmentFields(merged, 'enrollment', existing);
         const saved = Db.update('Enrollments', [Object.assign({ id: existing.id }, fields)])[0];
         Audit.log('enrollment.update', 'Enrollments', saved.id, '', ctx);
-        return { changes: { Enrollments: [saved] } };
+        const changes = { Enrollments: [saved] };
+        // Start-date (or plan/fee) edits should catch up pending dues through today.
+        if (saved.status === 'Active') Fees.mergeChanges(changes, billNewEnrollments([saved.id]));
+        return { changes };
       }
 
       Util.requireFields(payload, ['student_id', 'course_id']);

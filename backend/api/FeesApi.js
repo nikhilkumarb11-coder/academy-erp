@@ -48,7 +48,9 @@ const FeesApi = (() => {
         if (!dryRun) Fees.mergeChanges(changes, result.changes);
         const rows = result.created || [];
         rows.forEach((r) => createdRows.push(r));
-        if (dryRun) virtualDues.push(...rows);
+        // Always feed later months in this request so backfill is consistent even before
+        // a subsequent Db.all would see the rows just inserted.
+        virtualDues.push(...rows);
         (result.skipped || []).forEach((s) => {
           const key = `${s.enrollment_id}:${s.reason}`;
           if (!skippedByKey[key]) skippedByKey[key] = s;
